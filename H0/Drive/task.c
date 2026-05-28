@@ -9,8 +9,8 @@ extern int16_t base_speed;
 extern float Yaw_Offset;
 
 // ---- Task 2 参数 ----
-#define BASE_SPEED_STRAIGHT   45
-#define BASE_SPEED_CURVE      32
+#define BASE_SPEED_STRAIGHT   60
+#define BASE_SPEED_CURVE      40
 #define RIGHT_HALF_CIRCLE  (-185.0f)  // 右半圆目标角（B→C，顺时针）
 #define LEFT_HALF_CIRCLE   (+185.0f)  // 左半圆目标角（D→A，逆时针）
 #define YAW_THRESHOLD         8.0f    // 退出阈值（度）
@@ -51,6 +51,7 @@ void Task_Key_Scan(void)
             Yaw_Offset = IMU_Data.Yaw; 
             current_state = 0;
             last_line_status = 0x00;
+            count = 0;
             task_running = 1; 
             while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET);
         }
@@ -120,7 +121,7 @@ void Task_Dispatcher(void)
         switch(selected_task) 
         {
             case 1: Run_Task_1(); break; 
-            case 2: /*Run_Task_2();  */   break; 
+            case 2: Run_Task_2(); break; 
             case 3: /* Run_Task_3(); */ break;
             case 4: /* Run_Task_4(); */ break;
         }
