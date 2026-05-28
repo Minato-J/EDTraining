@@ -271,7 +271,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
             }
             // ================= 3. turn_out 平滑滤波 (防抖) =================
             static float turn_out_smooth = 0;
-            turn_out_smooth = 0.6f * turn_out_smooth + 0.4f * turn_out;
+            turn_out_smooth = 0.3f * turn_out_smooth + 0.7f * turn_out;
 
             target_v_left  = base_speed - (int16_t)turn_out_smooth;
             target_v_right = base_speed + (int16_t)turn_out_smooth;
