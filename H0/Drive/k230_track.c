@@ -39,6 +39,10 @@ int16_t K230_Get_Turn_Speed(uint8_t sensor_val)
         case 0x04: turn_speed = -3;  break;    // 000100
         case 0x18: turn_speed = 6; break;      // 011000
         case 0x06: turn_speed = -6;  break;    // 000110
+        case 0x38: turn_speed = 8; break;      // 111000 三个1左偏
+        case 0x07: turn_speed = -8; break;     // 000111 三个1右偏
+        case 0x1C: turn_speed = 9; break;      // 011100 四位含三1左偏
+        case 0x0E: turn_speed = -9; break;     // 001110 四位含三1右偏
         case 0x10: turn_speed = 10; break;     // 010000
         case 0x02: turn_speed = -10;  break;   // 000010
         case 0x30: turn_speed = 18; break;     // 110000
