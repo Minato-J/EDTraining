@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>H0 代码结构分析 — 自动行驶小车</title>
+<style>
+  :root {
+    --primary: #1a73e8;
+    --primary-dark: #1557b0;
+    --bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --text: #202124;
+    --text-secondary: #5f6368;
+    --border: #e0e0e0;
+    --done: #0d904f;
+    --partial: #e37400;
+    --todo: #d93025;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+  }
+  .header {
+    background: linear-gradient(135deg, #1a237e 0%, #0d47a1 50%, #01579b 100%);
+    color: #fff; padding: 40px 0; text-align: center;
+  }
+  .header h1 { font-size: 2em; margin-bottom: 6px; }
+  .header .subtitle { font-size: 0.95em; opacity: 0.85; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 20px; }
+  section { margin-bottom: 40px; }
+  section h2 {
+    font-size: 1.5em; padding-bottom: 8px;
+    border-bottom: 3px solid var(--primary); margin-bottom: 20px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  section h2 .num {
+    display: inline-flex; align-items:center; justify-content:center;
+    width: 32px; height: 32px; background: var(--primary); color: #fff;
+    border-radius: 50%; font-size: 0.68em;
+  }
+  section h3 { font-size: 1.1em; color: var(--primary-dark); margin: 18px 0 10px; }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .card.done   { border-left: 4px solid var(--done); }
+  .card.partial { border-left: 4px solid var(--partial); }
+  .card.todo   { border-left: 4px solid var(--todo); }
+  .card h3 { margin-top: 0; }
+  .card h4 { margin: 10px 0 6px; color: #333; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 0.91em; }
+  th, td { padding: 10px 14px; border: 1px solid var(--border); text-align: left; }
+  th { background: #e8f0fe; font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .flow-box {
+    background: #f1f3f4; border-radius: 10px; padding: 18px 22px; margin: 14px 0;
+    font-family: "Courier New", monospace; font-size: 0.87em;
+    white-space: pre; overflow-x: auto; line-height: 1.7;
+  }
+  .tag {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: 0.82em; font-weight: 500; margin: 2px 4px 2px 0;
+  }
+  .tag-done    { background: #e8f5e9; color: #2e7d32; }
+  .tag-partial { background: #fff3e0; color: #e65100; }
+  .tag-todo    { background: #fce4ec; color: #c62828; }
+  .tag-new     { background: #e8f0fe; color: #1565c0; }
+  .info-box {
+    background: #e8f0fe; border-left: 4px solid var(--primary);
+    padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 14px 0;
+  }
+  .success-box {
+    background: #e8f5e9; border-left: 4px solid var(--done);
+    padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 14px 0;
+  }
+  ul, ol { margin: 6px 0 14px 20px; }
+  li { margin: 3px 0; }
+  .progress-bar {
+    height: 22px; background: #e0e0e0; border-radius: 11px; overflow: hidden; margin: 8px 0;
+  }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--done), #34a853);
+    border-radius: 11px; transition: width 0.5s;
+  }
+  .footer { text-align: center; padding: 28px; color: var(--text-secondary); font-size: 0.88em; border-top: 1px solid var(--border); }
+  @media (max-width: 768px) { .header h1 { font-size: 1.4em; } .card-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>H0 代码结构分析报告</h1>
+  <div class="subtitle">STM32F407VETx + K230 自动行驶小车 · 基于计划.html 的完成度分析 · 更新于 2026-05-21</div>
+</div>
+
+<div class="container">
+
+<!-- ================================================================ -->
+<!-- 1. 总览 -->
+<!-- ================================================================ -->
+<section id="overview">
+  <h2><span class="num">1</span> 项目总览</h2>
+
+  <div class="card">
+    <table>
+      <tr><th style="width:140px">项目</th><th>内容</th></tr>
+      <tr><td>MCU</td><td>STM32F407VETx (Cortex-M4, 168MHz)</td></tr>
+      <tr><td>开发环境</td><td>STM32CubeIDE (.ioc) + MDK-Keil (ARM Compiler 5/6)</td></tr>
+      <tr><td>HAL 库</td><td>STM32F4xx HAL Driver v1.x</td></tr>
+      <tr><td>视觉模块</td><td>K230 (Canaan) — MicroPython, 640x480 摄像头</td></tr>
+      <tr><td>IMU 模块</td><td>WIT (维特智能) JY901S — 9轴姿态传感器, USART2 通信</td></tr>
+      <tr><td>电机驱动</td><td>TB6612 双路电机驱动 (H桥)</td></tr>
+      <tr><td>电机类型</td><td>带编码器的直流减速电机 x 2 (左右独立)</td></tr>
+      <tr><td>用户代码量</td><td>约 2100 行 (不含 HAL 库)</td></tr>
+      <tr><td>分析日期</td><td>2026-05-21</td></tr>
+    </table>
+  </div>
+
+  <h3>整体完成度</h3>
+  <div style="margin-bottom:4px;"><strong>基础电控层: 95%</strong> (硬件驱动 + PID + IMU 全部就绪, PWM 归一化修复)</div>
+  <div class="progress-bar"><div class="progress-fill" style="width:95%;"></div></div>
+  <div style="margin-bottom:4px;"><strong>视觉巡线: 100%</strong> (7-byte 协议 + 连续偏差 + 置信度 + 顶点检测全部完成)</div>
+  <div class="progress-bar"><div class="progress-fill" style="width:100%;"></div></div>
+  <div style="margin-bottom:4px;"><strong>导航与任务: 100%</strong> (路径状态机 + 航位推算 + 双模式切换 + 停车全部完成)</div>
+  <div class="progress-bar"><div class="progress-fill" style="width:100%;"></div></div>
+  <div style="margin-bottom:4px;"><strong>总体: 95%</strong> (PID 上车整定待验证, OLED 待 CubeMX I2C 配置)</div>
+  <div class="progress-bar"><div class="progress-fill" style="width:95%;"></div></div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 2. 代码目录树 -->
+<!-- ================================================================ -->
+<section id="tree">
+  <h2><span class="num">2</span> 代码目录结构</h2>
+  <div class="flow-box">
+H0/
+├── .mxproject                          # STM32CubeIDE 项目配置
+├── H0.ioc                             # CubeMX 引脚/外设配置
+│
+├── Core/                              # ===== 应用层核心代码 =====
+│   ├── Inc/
+│   │   ├── main.h                     #   主头文件 (引脚宏定义: AIN1/2, BIN1/2, STBY)
+│   │   ├── gpio.h                     #   GPIO 函数声明
+│   │   ├── tim.h                      #   定时器句柄外部声明 (htim2/3/4/6)
+│   │   ├── usart.h                    #   串口句柄外部声明 (huart1/2)
+│   │   ├── stm32f4xx_hal_conf.h      #   HAL 库模块开关配置
+│   │   └── stm32f4xx_it.h            #   中断服务函数声明
+│   └── Src/
+│       ├── main.c                     # ★ 主程序: 初始化+控制循环+TIM6 ISR
+│       ├── gpio.c                     #   GPIO 初始化 (PE2~PE6 电机控制)
+│       ├── tim.c                      #   定时器初始化 (TIM2/3/4/6)
+│       ├── usart.c                    #   串口初始化 (USART1/2) + printf重定向
+│       ├── stm32f4xx_hal_msp.c       #   HAL MSP 初始化
+│       ├── stm32f4xx_it.c            #   中断服务函数 (USART2/TIM6)
+│       └── system_stm32f4xx.c        #   系统时钟初始化
+│
+├── Drive/                             # ===== 驱动层 (自编写) =====
+│   ├── Motor.c / Motor.h              #   电机驱动: PWM+方向+使能 (PWM归一化)
+│   ├── encoder.c / encoder.h          #   编码器: 左右轮速度读取
+│   ├── pid.c / pid.h                  #   PID 控制器: 增量型+积分限幅
+│   ├── wit_imu.c / wit_imu.h          #   WIT IMU: 11字节协议解析+姿态数据
+│   ├── path_fsm.c / path_fsm.h        # [新] 路径状态机: 12段查找表+TASK1-4
+│   ├── buzzer.c / buzzer.h            # [新] 蜂鸣器驱动: PB0, 200ms提示
+│   ├── led.c / led.h                  # [新] LED驱动: PC13, 3次闪烁
+│   └── oled.c / oled.h                # [新] SSD1306 OLED: I2C1, 5x7字体
+│
+├── Drivers/                           # ===== STM32 HAL 库 (官方) =====
+│   ├── CMSIS/
+│   └── STM32F4xx_HAL_Driver/
+│
+├── MDK-ARM/                           # ===== Keil 工程文件 =====
+│   ├── H0.uvprojx / .uvoptx
+│   ├── H0.hex / H0.axf
+│   └── H0/
+│
+└── untitled_1.py                      # ===== K230 视觉循迹 (Python) =====
+    7-byte协议: 连续偏差值+置信度+顶点标志
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 3. 已完成的模块 -->
+<!-- ================================================================ -->
+<section id="completed">
+  <h2><span class="num">3</span> 已完成项目清单</h2>
+
+  <div class="card-grid">
+
+    <div class="card done">
+      <h3>1. 电机驱动模块 <span class="tag tag-done">完成</span></h3>
+      <p><strong>文件:</strong> Drive/Motor.c, Drive/Motor.h</p>
+      <p><strong>硬件:</strong> TB6612, TIM3 PWM (PA6/PA7), GPIO PE2~PE6</p>
+      <ul>
+        <li><code>Motor_Init()</code> — 启动PWM, 使能STBY</li>
+        <li><code>Motor_SetSpeed_A/B()</code> — 双向速度控制 (正=前进, 负=后退)</li>
+        <li>PWM 归一化: speed*99/1000 → TIM3 CCR 0-99</li>
+        <li>限幅: ±1000</li>
+      </ul>
+      <p><strong>对应计划:</strong> 第2天 — 电机驱动</p>
+    </div>
+
+    <div class="card done">
+      <h3>2. 编码器测速模块 <span class="tag tag-done">完成</span></h3>
+      <p><strong>文件:</strong> Drive/encoder.c, Drive/encoder.h</p>
+      <p><strong>硬件:</strong> TIM2 (左 PA0/PA1), TIM4 (右 PD12/PD13), 编码器模式</p>
+      <ul>
+        <li><code>Encoder_Init()</code> — 启动双路编码器</li>
+        <li><code>Encoder_Get_Count_Left/Right()</code> — 读取并复位</li>
+        <li>50Hz IIR滤波: fil = 0.7*fil_old + 0.3*raw</li>
+      </ul>
+      <p><strong>对应计划:</strong> 第3天 — 编码器测速</p>
+    </div>
+
+    <div class="card done">
+      <h3>3. PID 控制器模块 <span class="tag tag-done">完成</span></h3>
+      <p><strong>文件:</strong> Drive/pid.c, Drive/pid.h</p>
+      <ul>
+        <li>增量型 PID: Kp, Ki, Kd, 积分限幅</li>
+        <li>3 个实例: 左轮(Kp0.9/Ki0.12), 右轮(Kp0.8/Ki0.12), 角度(Kp1.2/Kd0.6)</li>
+        <li>输出限幅: 速度环±500, 角度环±40</li>
+      </ul>
+      <p><strong>对应计划:</strong> 第4天 — 速度闭环</p>
+    </div>
+
+    <div class="card done">
+      <h3>4. WIT IMU 姿态模块 <span class="tag tag-done">完成</span></h3>
+      <p><strong>文件:</strong> Drive/wit_imu.c, Drive/wit_imu.h</p>
+      <p><strong>硬件:</strong> JY901S, USART2 (PA2/PA3, 115200 baud)</p>
+      <ul>
+        <li>11字节帧解析: 0x55 + 数据9 + 校验和1</li>
+        <li>加速度(0x51)/角速度(0x52)/角度(0x53)</li>
+        <li>Yaw角滤波: >30°跳变拒绝</li>
+      </ul>
+      <p><strong>对应计划:</strong> 第6天 — 陀螺仪集成</p>
+    </div>
+
+    <div class="card done">
+      <h3>5. 串口通信模块 <span class="tag tag-done">完成</span></h3>
+      <p><strong>文件:</strong> Core/Src/usart.c, stm32f4xx_it.c</p>
+      <ul>
+        <li>USART1: 115200 (PA9/PA10) — printf 调试输出</li>
+        <li>USART2: 115200 (PA2/PA3) — IMU + K230 数据接收</li>
+        <li>协议复用: 根据帧头 (0xAA/0x55) 自动区分 K230/IMU</li>
+      </ul>
+      <p><strong>对应计划:</strong> 第8天 — MCU与模块串口通信</p>
+    </div>
+
+    <div class="card done">
+      <h3>6. GPIO 电机控制引脚 <span class="tag tag-done">完成</span></h3>
+      <p><strong>文件:</strong> Core/Src/gpio.c</p>
+      <ul>
+        <li>AIN1(PE2), AIN2(PE3) — 左轮方向</li>
+        <li>BIN1(PE4), BIN2(PE5) — 右轮方向</li>
+        <li>STBY(PE6) — TB6612 待机</li>
+      </ul>
+    </div>
+
+    <div class="card done">
+      <h3>7. 定时器外设配置 <span class="tag tag-done">完成</span></h3>
+      <p><strong>文件:</strong> Core/Src/tim.c</p>
+      <table>
+        <tr><th>定时器</th><th>功能</th><th>配置</th></tr>
+        <tr><td>TIM2</td><td>左编码器</td><td>Encoder Mode TI12</td></tr>
+        <tr><td>TIM3</td><td>电机 PWM</td><td>PWM Mode1, 20kHz, CCR 0-99</td></tr>
+        <tr><td>TIM4</td><td>右编码器</td><td>Encoder Mode TI12</td></tr>
+        <tr><td>TIM6</td><td>控制定时器</td><td>50Hz (20ms) 中断</td></tr>
+      </table>
+    </div>
+
+    <div class="card done">
+      <h3>8. K230 视觉巡线 (Python) <span class="tag tag-done">完成</span></h3>
+      <p><strong>文件:</strong> untitled_1.py</p>
+      <ul>
+        <li>6 ROI 灰度检测 + 加权质心法 → 连续偏差值 ±500</li>
+        <li>置信度 0-100 (ROI覆盖 60% + 对比度 40%)</li>
+        <li>顶点检测: 偏差突变>80 + 交叉路口≥5 ROI + 30帧去抖</li>
+        <li>7-byte 协议: 0xAA devL devH conf vFlag csum 0x55</li>
+      </ul>
+    </div>
+
+    <div class="card done">
+      <h3>9. 路径状态机 <span class="tag tag-new">新增</span></h3>
+      <p><strong>文件:</strong> Drive/path_fsm.c, Drive/path_fsm.h</p>
+      <ul>
+        <li>12段查找表: TASK_IDLE → TASK_1-4 → TASK_DONE</li>
+        <li>双模式: MODE_LINE_FOLLOW / MODE_DEAD_RECKON</li>
+        <li>顶点防抖 300ms + 距离累积 + 圈数计数</li>
+        <li>TASK_4: 4圈自动循环, 子步跟踪</li>
+      </ul>
+    </div>
+
+    <div class="card done">
+      <h3>10. 声光指示 <span class="tag tag-new">新增</span></h3>
+      <p><strong>文件:</strong> Drive/buzzer.c/h, Drive/led.c/h</p>
+      <ul>
+        <li>蜂鸣器 PB0: 200ms 顶点提示音</li>
+        <li>LED PC13: 3次 200ms 闪烁</li>
+        <li>PathFSM_NotifyVertex() 自动触发</li>
+        <li>TIM6 ISR 驱动 Update 状态机</li>
+      </ul>
+    </div>
+
+    <div class="card done">
+      <h3>11. 精准停车控制 <span class="tag tag-new">新增</span></h3>
+      <p><strong>文件:</strong> Core/Src/main.c (TIM6 ISR)</p>
+      <ul>
+        <li>三段式: 减速(500ms线性→20%) → 微调(低速) → 刹车</li>
+        <li>停车条件: 视觉偏差<20 + 置信度>30 + 100ms稳定</li>
+        <li>仅对 is_terminal 段触发</li>
+      </ul>
+    </div>
+
+    <div class="card done">
+      <h3>12. OLED 显示驱动 <span class="tag tag-new">新增</span></h3>
+      <p><strong>文件:</strong> Drive/oled.c, Drive/oled.h</p>
+      <ul>
+        <li>SSD1306 128x64 I2C (I2C1: PB6/PB7, 需CubeMX启用)</li>
+        <li>内嵌 5x7 ASCII 字体, 支持 1x/2x 字号</li>
+        <li>OLED_ShowStatus(): 任务/速度/Yaw/距离/顶点</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 4. 系统架构 -->
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2><span class="num">4</span> 系统架构</h2>
+
+  <h3>4.1 硬件连接拓扑</h3>
+  <div class="flow-box">
+                         +------------------+
+                         |   STM32F407VETx  |
+                         |   (168MHz M4)    |
+                         +---+---+---+---+--+
+                             |   |   |   |
+        +--------------------+---+---+---+--------------------+
+        |                    |   |   |   |                    |
+        v                    v   v   v   v                    v
+  +----------+    +----------+ +----------+ +----------+ +----------+
+  | TB6612   |    | 编码器L  | | 编码器R  | | JY901S   | | K230     |
+  | 电机驱动 |    | (TIM2)   | | (TIM4)   | | IMU      | | 视觉     |
+  +----+-----+    +----------+ +----------+ +----------+ +----------+
+       |
+  +----+----+
+  | 左 右    |
+  | 电机     |
+  +---------+
+
+  新增外设:
+  +----------+ +----------+ +----------+
+  | 蜂鸣器   | | LED      | | OLED     |
+  | PB0      | | PC13     | | I2C1     |
+  +----------+ +----------+ +----------+
+  </div>
+
+  <h3>4.2 引脚分配</h3>
+  <div class="card">
+    <table>
+      <tr><th>GPIO</th><th>TIM/AF</th><th>功能</th><th>连接设备</th></tr>
+      <tr><td>PA0</td><td>TIM2_CH1</td><td>编码器A相</td><td>左编码器</td></tr>
+      <tr><td>PA1</td><td>TIM2_CH2</td><td>编码器B相</td><td>左编码器</td></tr>
+      <tr><td>PA2</td><td>USART2_TX</td><td>串口发送</td><td>IMU + K230</td></tr>
+      <tr><td>PA3</td><td>USART2_RX</td><td>串口接收</td><td>IMU + K230</td></tr>
+      <tr><td>PA6</td><td>TIM3_CH1</td><td>PWM输出</td><td>左轮 PWMA</td></tr>
+      <tr><td>PA7</td><td>TIM3_CH2</td><td>PWM输出</td><td>右轮 PWMB</td></tr>
+      <tr><td>PA9</td><td>USART1_TX</td><td>printf</td><td>调试串口</td></tr>
+      <tr><td>PA10</td><td>USART1_RX</td><td>串口接收</td><td>调试串口</td></tr>
+      <tr><td>PB0</td><td>GPIO OUT</td><td>蜂鸣器</td><td>蜂鸣器</td></tr>
+      <tr><td>PB6</td><td>I2C1_SCL</td><td>I2C时钟</td><td>OLED</td></tr>
+      <tr><td>PB7</td><td>I2C1_SDA</td><td>I2C数据</td><td>OLED</td></tr>
+      <tr><td>PC13</td><td>GPIO OUT</td><td>LED</td><td>LED指示灯</td></tr>
+      <tr><td>PD12</td><td>TIM4_CH1</td><td>编码器A相</td><td>右编码器</td></tr>
+      <tr><td>PD13</td><td>TIM4_CH2</td><td>编码器B相</td><td>右编码器</td></tr>
+      <tr><td>PE2</td><td>GPIO OUT</td><td>AIN1</td><td>左轮方向1</td></tr>
+      <tr><td>PE3</td><td>GPIO OUT</td><td>AIN2</td><td>左轮方向2</td></tr>
+      <tr><td>PE4</td><td>GPIO OUT</td><td>BIN1</td><td>右轮方向1</td></tr>
+      <tr><td>PE5</td><td>GPIO OUT</td><td>BIN2</td><td>右轮方向2</td></tr>
+      <tr><td>PE6</td><td>GPIO OUT</td><td>STBY</td><td>电机待机</td></tr>
+    </table>
+  </div>
+
+  <h3>4.3 控制回路数据流</h3>
+  <div class="flow-box">
+  K230偏差(±500) ──→ 角度修正(×0.06=±30°) ──→ line_ref_heading
+                                                         │
+  目标Yaw (航位推算) ──────────────────────────────────→ │
+                                                         ▼
+                                              +------------------+
+                                              | 方向设定点选择    |
+                                              | LINE_FOLLOW vs   |
+                                              | DEAD_RECKON      |
+                                              +--------+---------+
+                                                       │
+                                                       ▼
+                                              角度误差 (±180°)
+                                                       │
+                                                       ▼
+                                              +------------------+
+                                              | 角度 PD 控制器   |
+                                              | Kp=1.2  Kd=0.6  |
+                                              +--------+---------+
+                                                       │ turn_out (±40)
+                                                       ▼
+                                              +------------------+
+                                              | 差速分配 + 停车  |
+                                              | L=base-turn      |
+                                              | R=base+turn      |
+                                              +---+---------+---+
+                                                  │         │
+                                         target_v_left  target_v_right
+                                                  │         │
+                                                  v         v
+                                         +--------+ +--------+
+                                         |左轮PID | |右轮PID |
+                                         |0.9/0.12| |0.8/0.12|
+                                         +---+----+ +----+---+
+                                             │           │
+                                   编码器反馈│           │编码器反馈
+                                             v           v
+                                        Motor_SetSpeed_A/B
+                                             │           │
+                                             v           v
+                                        TIM3_CH1    TIM3_CH2
+  </div>
+
+  <h3>4.4 中断调度</h3>
+  <div class="card">
+    <table>
+      <tr><th>中断源</th><th>优先级</th><th>频率</th><th>功能</th></tr>
+      <tr><td>TIM6_DAC</td><td>0</td><td>50Hz (20ms)</td><td>控制循环: 传感器→PID→电机+停车+声光</td></tr>
+      <tr><td>USART2</td><td>0</td><td>按需</td><td>K230 7-byte帧解析 + IMU 11-byte解析</td></tr>
+      <tr><td>SysTick</td><td>—</td><td>1kHz</td><td>HAL 滴答时钟</td></tr>
+      <tr><td>TIM2/TIM4</td><td>—</td><td>硬件自动</td><td>编码器脉冲计数</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 5. 计划对照表 -->
+<!-- ================================================================ -->
+<section id="plan-mapping">
+  <h2><span class="num">5</span> 计划对照表</h2>
+
+  <table>
+    <tr><th style="width:40px">天</th><th>任务</th><th>状态</th><th>实现文件</th><th>备注</th></tr>
+
+    <tr style="background:#e8f5e9;">
+      <td colspan="5"><strong>第一阶段: 基础电控 (第1-3天)</strong></td>
+    </tr>
+    <tr>
+      <td>1</td><td>硬件搭建</td>
+      <td><span class="tag tag-done">完成</span></td>
+      <td>gpio.c, H0.ioc</td>
+      <td>GPIO 引脚全部配置 + 新增 PB0/PC13/PB6/PB7</td>
+    </tr>
+    <tr>
+      <td>2</td><td>电机驱动</td>
+      <td><span class="tag tag-done">完成</span></td>
+      <td>Motor.c/h, tim.c</td>
+      <td>TB6612 双路 + PWM 归一化</td>
+    </tr>
+    <tr>
+      <td>3</td><td>编码器测速</td>
+      <td><span class="tag tag-done">完成</span></td>
+      <td>encoder.c/h, tim.c</td>
+      <td>双路编码器 + IIR 低通滤波</td>
+    </tr>
+
+    <tr style="background:#e3f2fd;">
+      <td colspan="5"><strong>第二阶段: 闭环控制 (第4-7天)</strong></td>
+    </tr>
+    <tr>
+      <td>4</td><td>速度闭环</td>
+      <td><span class="tag tag-done">完成</span></td>
+      <td>pid.c/h, main.c</td>
+      <td>左右轮独立速度 PID</td>
+    </tr>
+    <tr>
+      <td>5</td><td>参数整定</td>
+      <td><span class="tag tag-partial">待上车</span></td>
+      <td>—</td>
+      <td>需上车实测整定</td>
+    </tr>
+    <tr>
+      <td>6</td><td>陀螺仪集成</td>
+      <td><span class="tag tag-done">完成</span></td>
+      <td>wit_imu.c/h</td>
+      <td>JY901S 解析 + Yaw 滤波</td>
+    </tr>
+    <tr>
+      <td>7</td><td>串级 PID</td>
+      <td><span class="tag tag-done">完成</span></td>
+      <td>main.c (TIM6 ISR)</td>
+      <td>角度外环 + 速度内环</td>
+    </tr>
+
+    <tr style="background:#e8f5e9;">
+      <td colspan="5"><strong>第三阶段: 视觉巡线 (第8-11天)</strong></td>
+    </tr>
+    <tr>
+      <td>8</td><td>K230 基础</td>
+      <td><span class="tag tag-done">完成</span></td>
+      <td>untitled_1.py</td>
+      <td>摄像头 + 串口 + 7-byte 协议</td>
+    </tr>
+    <tr>
+      <td>9</td><td>巡线算法</td>
+      <td><span class="tag tag-done">完成</span></td>
+      <td>untitled_1.py</td>
+      <td>6 ROI 加权质心法, 连续偏差 ±500</td>
+    </tr>
+    <tr>
+      <td>10</td><td>视觉闭环</td>
+      <td><span class="tag tag-done">完成</span></td>
+      <td>main.c</td>
+      <td>偏差→角度修正, 置信度门控</td>
+    </tr>
+    <tr>
+      <td>11</td><td>顶点检测</td>
+      <td><span class="tag tag-done">完成</span></td>
+      <td>untitled_1.py + main.c</td>
+      <td>K230检测 + MCU状态机切换</td>
+    </tr>
+
+    <tr style="background:#e8f5e9;">
+      <td colspan="5"><strong>第四阶段: 整体优化 (第12-14天)</strong></td>
+    </tr>
+    <tr>
+      <td>12</td><td>赛题整合</td>
+      <td><span class="tag tag-done">完成</span></td>
+      <td>path_fsm.c/h</td>
+      <td>12段状态机 + TASK_1/2</td>
+    </tr>
+    <tr>
+      <td>13</td><td>要求三+四</td>
+      <td><span class="tag tag-done">完成</span></td>
+      <td>path_fsm.c + main.c</td>
+      <td>航位推算 + 混合模式 + 4圈</td>
+    </tr>
+    <tr>
+      <td>14</td><td>报告+答辩</td>
+      <td><span class="tag tag-todo">待准备</span></td>
+      <td>—</td>
+      <td>—</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<!-- 6. 关键 Bug 修复记录 -->
+<!-- ================================================================ -->
+<section id="bug-fixes">
+  <h2><span class="num">6</span> 关键 Bug 修复记录</h2>
+  <div class="card">
+    <table>
+      <tr><th>Bug</th><th>文件</th><th>行</th><th>修复</th></tr>
+      <tr><td>USART2 波特率不匹配</td><td>usart.c</td><td>76</td><td>9600 → 115200, 匹配 K230 发送速率</td></tr>
+      <tr><td>K230 3字节协议无法解析新数据</td><td>main.c</td><td>311-333</td><td>重写为 7-byte 帧解析 + XOR 校验</td></tr>
+      <tr><td>TIM3 PWM 未归一化到 CCR</td><td>Motor.c</td><td>26, 42</td><td>speed * 99 / 1000 映射到 0-99</td></tr>
+      <tr><td>base_speed=0 导致电机不转</td><td>main.c</td><td>57</td><td>初始化为 200</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<!-- 7. 待完成项 -->
+<!-- ================================================================ -->
+<section id="remaining">
+  <h2><span class="num">7</span> 待完成项</h2>
+
+  <div class="success-box">
+    <h4>已完成 (9/9 编码任务)</h4>
+    <p>路径状态机 · K230协议升级 · 视觉PID接入 · 顶点检测 · 航位推算 · 双模式切换 · 声光指示 · OLED驱动 · 精准停车</p>
+  </div>
+
+  <div class="info-box">
+    <h4>待上车验证</h4>
+    <ol>
+      <li><strong>PID 上车整定:</strong> 当前参数为理论值, 需实测优化 Kp/Ki/Kd (目标: 上升时间<200ms, 超调<15%)</li>
+      <li><strong>OLED CubeMX 配置:</strong> 启用 I2C1 (PB6=SCL, PB7=SDA, 400kHz Fast Mode), 然后在 main.c 中调用 OLED_Init() + 周期性 OLED_ShowStatus()</li>
+      <li><strong>报告+答辩:</strong> 第14天任务, 尚未准备</li>
+    </ol>
+  </div>
+</section>
+
+</div>
+
+<div class="footer">
+  代码结构分析报告 · 基于计划.html · 更新于 2026-05-21
+</div>
+
+</body>
+</html>
