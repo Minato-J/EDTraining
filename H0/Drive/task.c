@@ -75,65 +75,103 @@ static void Run_Task_1(void)
 }
 //
 
-//�]2�^
+//
 static void Run_Task_3(void)
 {
     static uint16_t wait_tick = 0;
-switch (count)
+
+    // 统一的角度误差计算
+    float err = target_angle - current_angle;
+    while (err > 180.0f)  err -= 360.0f;
+    while (err < -180.0f) err += 360.0f;
+    if (err < 0) err = -err;
+
+    // 弃用 count 做状态机，改用发车会自动清零的 current_state
+    switch (current_state)
     {
         // ============================================================
-        // count 0: A点原地转动对齐角度 -> 完毕后直线行驶冲向C点
+        // 状态 0: A点原地转动对齐角度 (-50.2度)
         // ============================================================
         case 0:
-            if (current_state == 0) 
+            base_speed = 0;         // 原地不动
+            target_angle = -50.2f;  // A→C 精确对角线夹角
+
+            if (err < 3.0f) 
             {
-                // ---- 【阶段 1：原地旋转】 ----
-                base_speed = 0;         // 速度为 0，使底层 PID 仅进行原地转向
-                target_angle = -38.2f;  // A→C 的精确对角线夹角 (-arctan(120/100))
-
-                // 计算当前角度与目标角度的绝对误差
-                float err = target_angle - current_angle;
-                while (err > 180.0f)  err -= 360.0f;
-                while (err < -180.0f) err += 360.0f;
-                if (err < 0) err = -err;
-
-                // 角度误差小于 3 度时，认为角度已对准
-                if (err < 3.0f) 
+                wait_tick++;
+                if (wait_tick >= 20) // 稳定保持约 200ms
                 {
-                    wait_tick++;
-                    if (wait_tick >= 10) // 稳定保持大约 200ms
-                    {
-                        current_state = 1; // 切换到阶段 2：直线行驶
-                        wait_tick = 0;
-                    }
-                }
-                else 
-                {
-                    wait_tick = 0; // 角度未对准时清空计数
+                    count = 0;       // 出发前清空计数
+                    current_state = 1; // 切换到状态 1：直线冲锋
+                    wait_tick = 0;
                 }
             }
-            else if (current_state == 1) 
+            else { wait_tick = 0; }
+            break;
+
+        // ============================================================
+        // 状态 1: 直线全速冲向 C 点，等待撞线
+        // ============================================================
+        case 1:
+            target_angle = -50.2f;  
+            base_speed = 60;         
+
+            // 当小车在 TIM6 中撞击 C 点黑线导致 count 变成 1 时，切入下一状态
+            if (count >= 1) 
             {
-                // ---- 【阶段 2：直线行驶】 ----
-                target_angle = -38.2f;  // 锁死目标角度
-                base_speed = 60;         // 赋予前进速度，全速冲向 C 点
-                
-                // 注：此阶段车往前走，直到触发黑线使 TIM6 中断将 count 自增为 1
+                current_state = 2;   // 切换到状态 2：C点回正
+                wait_tick = 0;
             }
             break;
 
         // ============================================================
-        // count 1: 到达 C 点，任务停止
+        // 状态 2: C点原地回正 (强制锁死 count = 1，防止晃动误触发)
         // ============================================================
-        case 1:
+        case 2:
+            base_speed = 0;         // 原地不动
+            target_angle = 0.0f;    // 角度回正
+            count = 1;              // 【核心】强行把 count 锁死在 1，无视任何传感器抖动
+
+            if (err < 3.0f) 
+            {
+                wait_tick++;
+                if (wait_tick >= 30) // 稳定保持约 300ms
+                {
+                    count = 1;       // 确保出发前 count 为 1
+                    current_state = 3; // 切换到状态 3：解锁并循迹
+                    wait_tick = 0;
+                }
+            }
+            else { wait_tick = 0; }
+            break;
+
+        // ============================================================
+        // 状态 3: 沿半圆弧循迹行驶，直到再次触线/离线让 count 变成 2
+        // ============================================================
+        case 3:
+            base_speed = 30;        // 赋予循迹基础速度
+            // 此时由于底层 line_sensor_data 不为 0x00，会自动进入摄像头循迹模式
+            
+            if (count >= 2) 
+            {
+                current_state = 4;   // 看到下一个点，去停车
+            }
+            break;
+
+        // ============================================================
+        // 状态 4: 任务结束，停车
+        // ============================================================
+        case 4:
         default:
-            base_speed = 0;      // 电机停转
-            task_running = 0;    // 关闭任务运行状态
-            current_state = 0;   // 复位子状态计数器，供下次发车使用
-            wait_tick = 0;       // 复位时间计数器
+            base_speed = 0;
+            task_running = 0;       // 关闭运行标志
+            current_state = 0;      // 复位状态
+            count = 0;              // 复位计数
+            wait_tick = 0;
             break;
     }
 }
+
 
 //
 static void Run_Task_2(void)
