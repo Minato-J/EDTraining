@@ -152,10 +152,10 @@ void Task_Dispatcher(void)
     {
         switch(selected_task) 
         {
-            case 1: Run_Task_1(); break; 
-            case 2: Run_Task_2(); break; 
+            //case 1: Run_Task_1(); break; 
+            //case 2: Run_Task_2(); break; 
             case 3: Run_Task_3(); break;
-            case 4: /* Run_Task_4(); */ break;
+            //case 4: /* Run_Task_4(); */ break;
         }
     }
     else 

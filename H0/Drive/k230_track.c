@@ -46,9 +46,9 @@ int16_t K230_Get_Turn_Speed(uint8_t sensor_val)
         case 0x10: turn_speed = 10; break;     // 010000
         case 0x02: turn_speed = -10;  break;   // 000010
         case 0x30: turn_speed = 18; break;     // 110000
-        case 0x20: turn_speed = 25; break;     // 100000
+        case 0x20: turn_speed = 27; break;     // 100000
         case 0x03: turn_speed = -18;  break;   // 000011
-        case 0x01: turn_speed = -25;  break;   // 000001
+        case 0x01: turn_speed = -27;  break;   // 000001
 
         case 0x00:
             turn_speed = last_turn;
