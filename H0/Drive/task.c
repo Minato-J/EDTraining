@@ -75,41 +75,12 @@ static void Run_Task_1(void)
 //
 
 //�]2�^
-static void Run_Task_2(void)
+static void Run_Task_3(void)
 {
-    if (count == 0)
-    {
-        // A->B: 直线段，保持初始朝向 0 deg
-        target_angle = 0.0f;
-        base_speed = BASE_SPEED_STRAIGHT;
-    }
-    else if (count == 1)
-    {
-        // B->C: 右半圆弧 (顺时针 185 deg)
-        target_angle = RIGHT_HALF_CIRCLE;  // -185
-        base_speed = BASE_SPEED_CURVE;     // 32，降速防甩出
-    }
-    else if (count == 2)
-    {
-        // C->D: 底部直线段，朝向 ~180 deg
-        target_angle = 180.0f;
-        base_speed = BASE_SPEED_STRAIGHT;
-    }
-    else if (count == 3)
-    {
-        // D->A: 左半圆弧 (逆时针 185 deg)
-        target_angle = LEFT_HALF_CIRCLE;   // +185
-        base_speed = BASE_SPEED_CURVE;
-    }
-    else if (count >= 4)
-    {
-        // 回到 A，停车
-        task_running = 0;
-        base_speed = 0;
-    }
+	
 }
 //
-static void Run_Task_3(void)
+static void Run_Task_2(void)
 {
     switch (count)
     {
@@ -152,10 +123,10 @@ void Task_Dispatcher(void)
     {
         switch(selected_task) 
         {
-            //case 1: Run_Task_1(); break; 
-            //case 2: Run_Task_2(); break; 
+            case 1: Run_Task_1(); break; 
+            case 2: Run_Task_2(); break; 
             case 3: Run_Task_3(); break;
-            //case 4: /* Run_Task_4(); */ break;
+//            case 4: Run_Task_4();  break;
         }
     }
     else 
