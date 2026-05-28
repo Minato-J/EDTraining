@@ -109,9 +109,41 @@ static void Run_Task_2(void)
     }
 }
 //
-static void Run_Task_3(void)  
+static void Run_Task_3(void)
 {
-	
+    switch (count)
+    {
+        case 0:
+            // A→B 直线段，保持初始朝向
+            target_angle = 0.0f;
+            base_speed = 60;
+            break;
+
+        case 1:
+            // B→C 右半圆弧，目标角度 -185°
+            target_angle = -185.0f;
+            base_speed = 30;
+            break;
+
+        case 2:
+            // C→D 直线段，朝向 180°
+            target_angle = 180.0f;
+            base_speed = 60;
+            break;
+
+        case 3:
+            // D→A 左半圆弧，目标角度 +185°
+            target_angle = 185.0f;
+            base_speed = 30;
+            break;
+
+        case 4:
+        default:
+            // 回到 A，停车
+            task_running = 0;
+            base_speed = 0;
+            break;
+    }
 }
 
 void Task_Dispatcher(void)
@@ -122,7 +154,7 @@ void Task_Dispatcher(void)
         {
             case 1: Run_Task_1(); break; 
             case 2: Run_Task_2(); break; 
-            case 3: /* Run_Task_3(); */ break;
+            case 3: Run_Task_3(); break;
             case 4: /* Run_Task_4(); */ break;
         }
     }
