@@ -266,11 +266,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
             {
                 // ---- 【模式 B：循迹模式】看到黑线了！抛弃陀螺仪，听摄像头的！ ----
                 // 同步目标角度，防止脱线切回盲开瞬间产生剧烈抽搐
-                target_angle = current_angle; 
+                target_angle = current_angle;
                 turn_out = K230_Get_Turn_Speed(line_sensor_data);
             }
-            target_v_left  = base_speed - (int16_t)turn_out;
-            target_v_right = base_speed + (int16_t)turn_out;
+            // ================= 3. turn_out 平滑滤波 (防抖) =================
+            static float turn_out_smooth = 0;
+            turn_out_smooth = 0.6f * turn_out_smooth + 0.4f * turn_out;
+
+            target_v_left  = base_speed - (int16_t)turn_out_smooth;
+            target_v_right = base_speed + (int16_t)turn_out_smooth;
         }
         else 
         {
