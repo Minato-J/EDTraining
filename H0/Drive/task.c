@@ -121,7 +121,7 @@ static void Run_Task_3(void)
 
         case 1:
             // B→C 右半圆弧，目标角度 -185°
-            target_angle = -185.0f;
+            //target_angle = -185.0f;
             base_speed = 30;
             break;
 
@@ -133,7 +133,7 @@ static void Run_Task_3(void)
 
         case 3:
             // D→A 左半圆弧，目标角度 +185°
-            target_angle = 185.0f;
+            //target_angle = 185.0f;
             base_speed = 30;
             break;
 
