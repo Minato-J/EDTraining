@@ -10,7 +10,7 @@ extern float Yaw_Offset;
 
 // ---- Task 2 参数 ----
 #define BASE_SPEED_STRAIGHT   60
-#define BASE_SPEED_CURVE      40
+#define BASE_SPEED_CURVE      30
 #define RIGHT_HALF_CIRCLE  (-185.0f)  // 右半圆目标角（B→C，顺时针）
 #define LEFT_HALF_CIRCLE   (+185.0f)  // 左半圆目标角（D→A，逆时针）
 #define YAW_THRESHOLD         8.0f    // 退出阈值（度）

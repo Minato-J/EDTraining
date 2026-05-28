@@ -35,16 +35,16 @@ int16_t K230_Get_Turn_Speed(uint8_t sensor_val)
     switch(sensor_val) 
     {
         case 0x0C: turn_speed = 0;  break;     // 001100
-        case 0x08: turn_speed = 5; break;      // 001000
-        case 0x04: turn_speed = -5;  break;    // 000100
-        case 0x18: turn_speed = 10; break;     // 011000
-        case 0x06: turn_speed = -10;  break;   // 000110
-        case 0x10: turn_speed = 15; break;     // 010000
-        case 0x02: turn_speed = -15;  break;   // 000010
-        case 0x30: turn_speed = 30; break;     // 110000
-        case 0x20: turn_speed = 40; break;     // 100000
-        case 0x03: turn_speed = -30;  break;   // 000011
-        case 0x01: turn_speed = -40;  break;   // 000001
+        case 0x08: turn_speed = 3; break;      // 001000
+        case 0x04: turn_speed = -3;  break;    // 000100
+        case 0x18: turn_speed = 6; break;      // 011000
+        case 0x06: turn_speed = -6;  break;    // 000110
+        case 0x10: turn_speed = 10; break;     // 010000
+        case 0x02: turn_speed = -10;  break;   // 000010
+        case 0x30: turn_speed = 18; break;     // 110000
+        case 0x20: turn_speed = 25; break;     // 100000
+        case 0x03: turn_speed = -18;  break;   // 000011
+        case 0x01: turn_speed = -25;  break;   // 000001
 
         case 0x00:
             turn_speed = last_turn;
