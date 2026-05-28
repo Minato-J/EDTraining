@@ -46,33 +46,7 @@ int16_t K230_Get_Turn_Speed(uint8_t sensor_val)
   case 0x20: turn_speed = 40;   break;    // ��52�� - ��ݥ���
   case 0x03: turn_speed = -30;  break;    // ��53�� - ?���k��
   case 0x01: turn_speed = -40;  break;    // ��54�� - ��ݥk��
-  case 0x3F: turn_speed = 0;    break;
-//        // === �����~���A���t���� ===
-//        case 0x0C: turn_speed = 0;  break;   // 001100
-
-//        // === �L�L���� (?����V?) ===
-//        case 0x08: turn_speed = 5; break;  // 001000
-//        case 0x04: turn_speed = -5;  break;  // 000100
-//        
-//        // === ���װ��� (�y�L�ΤO����V?) ===
-//        case 0x18: turn_speed = 15; break;  // 011000
-//        case 0x06: turn_speed = 20;  break;  // 000110
-//        case 0x10: turn_speed = 15; break;  // 010000 
-//        case 0x02: turn_speed = 20;  break;  // 000010 
-
-//        // === ?�����áA��?�X?�D�F (�r����V?) ===
-//        case 0x30: turn_speed = -25; break;  // 110000 
-//        case 0x20: turn_speed = -30; break;  // 100000 
-//        case 0x03: turn_speed = 25;  break;  // 000011 
-//        case 0x01: turn_speed = 30;  break;  // 000001 
-
-//        case 0x00: 
-//            if (last_turn > 0) turn_speed = 70; 
-//            else if (last_turn < 0) turn_speed = -70;
-//            else turn_speed = 0;
-//            break;
-        // === �Q�r���f (���� 0x3F) ===
-          
+  case 0x3F: turn_speed = 0;    break;     // ��63�� - ���A���Χ�
 
      default: 
         turn_speed = last_turn; 

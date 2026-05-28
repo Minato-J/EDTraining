@@ -65,7 +65,7 @@ static void Run_Task_1(void)
     {
         // 1. ??�J������??�ӡA�_�B�}�O������
         target_angle = 0.0f; // ��?����??0�]??���U��?��?�AYaw_Offset �w?�M�s�F�^
-        base_speed = 0;     // ?�w��?�t�ס]??�ȧA�ݭn���u�A��?��?�t???�A��p 30~50�^
+        base_speed = 60;     // 直线速度
     }
 	else if (count == 1) 
 	{
