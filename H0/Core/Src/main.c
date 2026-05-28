@@ -133,6 +133,7 @@ int main(void)
 	OLED_Clear();
 	OLED_ShowString(0, 0, (uint8_t *)"Task:", 16, 1);
 	OLED_ShowString(0, 16, (uint8_t *)"startflag:", 16, 1);
+	OLED_ShowString(0, 32, (uint8_t *)"count:", 16, 1);
 	OLED_Refresh();
 	PID_Init(&pid_left,0.9f, 0.12f, 0.0f, 500.0f);  // == lelf
 	PID_Init(&pid_right, 0.8f, 0.12f, 0.0f, 500.0f);  // == right
@@ -161,6 +162,7 @@ int main(void)
 	  //
 	  OLED_ShowSignedNum(48, 0,selected_task, 4, 16, 1);
 	  OLED_ShowSignedNum(80, 16, task_running, 4, 16, 1);
+	  OLED_ShowSignedNum(48, 32, count, 4, 16, 1);
 	  OLED_Refresh();
 	  //printf("%d\r\n",selected_task);
       HAL_Delay(10);
@@ -226,15 +228,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		// == 中断测试 == 
 		//printf("test");
 		// == 判断计数 == 
-		if (task_running == 1) 
+		if (task_running == 1)
         {
             uint8_t current_line = (line_sensor_data != 0x00);
-            if (current_line != last_line_status) 
+            if (last_line_status == 1 && current_line == 0)
             {
-                last_line_status = current_line; //
-                count++;               // 瞬间记录节点
-                base_speed = 0;  // 【核心神之一手】：瞬间强行切断动力，车子绝对不会冲出线！
+                count++;
             }
+            last_line_status = current_line;
         }
         // ================= 1. 数据清洗：角度突变过滤器 =================
         static float last_valid_angle = 0;

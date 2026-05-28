@@ -7,6 +7,7 @@
 extern float target_angle;
 extern int16_t base_speed;
 extern float Yaw_Offset;
+extern float current_angle;
 
 // ---- Task 2 参数 ----
 #define BASE_SPEED_STRAIGHT   60
@@ -77,8 +78,63 @@ static void Run_Task_1(void)
 //�]2�^
 static void Run_Task_3(void)
 {
-	
+    static uint16_t wait_tick = 0;
+switch (count)
+    {
+        // ============================================================
+        // count 0: A点原地转动对齐角度 -> 完毕后直线行驶冲向C点
+        // ============================================================
+        case 0:
+            if (current_state == 0) 
+            {
+                // ---- 【阶段 1：原地旋转】 ----
+                base_speed = 0;         // 速度为 0，使底层 PID 仅进行原地转向
+                target_angle = -38.2f;  // A→C 的精确对角线夹角 (-arctan(120/100))
+
+                // 计算当前角度与目标角度的绝对误差
+                float err = target_angle - current_angle;
+                while (err > 180.0f)  err -= 360.0f;
+                while (err < -180.0f) err += 360.0f;
+                if (err < 0) err = -err;
+
+                // 角度误差小于 3 度时，认为角度已对准
+                if (err < 3.0f) 
+                {
+                    wait_tick++;
+                    if (wait_tick >= 10) // 稳定保持大约 200ms
+                    {
+                        current_state = 1; // 切换到阶段 2：直线行驶
+                        wait_tick = 0;
+                    }
+                }
+                else 
+                {
+                    wait_tick = 0; // 角度未对准时清空计数
+                }
+            }
+            else if (current_state == 1) 
+            {
+                // ---- 【阶段 2：直线行驶】 ----
+                target_angle = -38.2f;  // 锁死目标角度
+                base_speed = 60;         // 赋予前进速度，全速冲向 C 点
+                
+                // 注：此阶段车往前走，直到触发黑线使 TIM6 中断将 count 自增为 1
+            }
+            break;
+
+        // ============================================================
+        // count 1: 到达 C 点，任务停止
+        // ============================================================
+        case 1:
+        default:
+            base_speed = 0;      // 电机停转
+            task_running = 0;    // 关闭任务运行状态
+            current_state = 0;   // 复位子状态计数器，供下次发车使用
+            wait_tick = 0;       // 复位时间计数器
+            break;
+    }
 }
+
 //
 static void Run_Task_2(void)
 {

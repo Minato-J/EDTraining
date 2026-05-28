@@ -3,16 +3,17 @@
 
 #include "stdint.h"
 
-// ¼ÉÅS? main.c ©M¨ä¥L¤å¥ó¨Ï¥Îªº¥þ§½?¶q
+// ï¿½ï¿½ï¿½S? main.c ï¿½Mï¿½ï¿½Lï¿½ï¿½ï¿½Ï¥Îªï¿½ï¿½ï¿½ï¿½ï¿½?ï¿½q
 extern uint16_t selected_task;
 extern uint16_t task_running;
 extern uint8_t current_state;
 extern uint8_t last_line_status;
 extern uint8_t count;
+extern float current_angle;
 
-// ®Ö¤ß¨ç??©ú
-void Task_Manager_Init(void); // ¥ô?ºÞ²z¾¹ªì©l¤Æ (?Éó?¥Î¤@¦¸)
-void Task_Key_Scan(void);     // «ö??´y¨ç? (©ñ¦b while(1) ¨½)
-void Task_Dispatcher(void);   // ¥ô?¤À?¾¹ (©ñ¦b while(1) ¨½)
+// ï¿½Ö¤ß¨ï¿½??ï¿½ï¿½
+void Task_Manager_Init(void); // ï¿½ï¿½?ï¿½Þ²zï¿½ï¿½ï¿½ï¿½lï¿½ï¿½ (?ï¿½ï¿½?ï¿½Î¤@ï¿½ï¿½)
+void Task_Key_Scan(void);     // ï¿½ï¿½??ï¿½yï¿½ï¿½? (ï¿½ï¿½b while(1) ï¿½ï¿½)
+void Task_Dispatcher(void);   // ï¿½ï¿½?ï¿½ï¿½?ï¿½ï¿½ (ï¿½ï¿½b while(1) ï¿½ï¿½)
 
 #endif
