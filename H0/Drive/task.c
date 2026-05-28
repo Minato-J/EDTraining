@@ -8,6 +8,13 @@ extern float target_angle;
 extern int16_t base_speed;
 extern float Yaw_Offset;
 
+// ---- Task 2 å‚æ•° ----
+#define BASE_SPEED_STRAIGHT   45
+#define BASE_SPEED_CURVE      32
+#define RIGHT_HALF_CIRCLE  (-185.0f)  // å³åŠåœ†ç›®æ ‡è§’ï¼ˆBâ†’Cï¼Œé¡ºæ—¶é’ˆï¼‰
+#define LEFT_HALF_CIRCLE   (+185.0f)  // å·¦åŠåœ†ç›®æ ‡è§’ï¼ˆDâ†’Aï¼Œé€†æ—¶é’ˆï¼‰
+#define YAW_THRESHOLD         8.0f    // é€€å‡ºé˜ˆå€¼ï¼ˆåº¦ï¼‰
+
 uint16_t selected_task = 1;
 uint16_t task_running = 0;
 uint8_t current_state = 0;
@@ -55,9 +62,9 @@ static void Run_Task_1(void)
 	//
 	if (count == 0) 
     {
-        // 1. ??¹J¨ì¥ô¦ó¶Â??§Ó¡A°_¨B¦}«O«ùª½¨«
-        target_angle = 0.0f; // ¥Ø?¨¤«×??0¡]??«ö¤U«ö?Àş?¡AYaw_Offset ¤w?²M¹s¤F¡^
-        base_speed = 0;     // ?©w°ò?³t«×¡]??­È§A»İ­n®ÚÕu§Aªº?Éó?³t???¡A¤ñ¦p 30~50¡^
+        // 1. ??ï¿½Jï¿½ï¿½ï¿½ï¿½ï¿½ï¿½??ï¿½Ó¡Aï¿½_ï¿½Bï¿½}ï¿½Oï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+        target_angle = 0.0f; // ï¿½ï¿½?ï¿½ï¿½ï¿½ï¿½??0ï¿½]??ï¿½ï¿½ï¿½Uï¿½ï¿½?ï¿½ï¿½?ï¿½AYaw_Offset ï¿½w?ï¿½Mï¿½sï¿½Fï¿½^
+        base_speed = 0;     // ?ï¿½wï¿½ï¿½?ï¿½tï¿½×¡]??ï¿½È§Aï¿½İ­nï¿½ï¿½ï¿½uï¿½Aï¿½ï¿½?ï¿½ï¿½?ï¿½t???ï¿½Aï¿½ï¿½p 30~50ï¿½^
     }
 	else if (count == 1) 
 	{
@@ -66,29 +73,39 @@ static void Run_Task_1(void)
 }
 //
 
-//¡]2¡^
-static void Run_Task_2(void)  
+//ï¿½]2ï¿½^
+static void Run_Task_2(void)
 {
-	//
-        if (count == 1) 
-        {
-            base_speed = 20;       
-        }
-        else if (count == 2) 
-        {
-            target_angle = 180.0f; 
-            base_speed = 50; 
-        }
-        else if (count == 3) 
-        {
-            base_speed = 40;   
-        }
-        else if (count >= 4) 
-        {
-            task_running = 0;  
-            base_speed = 0;
-        }
-	//
+    if (count == 0)
+    {
+        // A->B: ç›´çº¿æ®µï¼Œä¿æŒåˆå§‹æœå‘ 0 deg
+        target_angle = 0.0f;
+        base_speed = BASE_SPEED_STRAIGHT;
+    }
+    else if (count == 1)
+    {
+        // B->C: å³åŠåœ†å¼§ (é¡ºæ—¶é’ˆ 185 deg)
+        target_angle = RIGHT_HALF_CIRCLE;  // -185
+        base_speed = BASE_SPEED_CURVE;     // 32ï¼Œé™é€Ÿé˜²ç”©å‡º
+    }
+    else if (count == 2)
+    {
+        // C->D: åº•éƒ¨ç›´çº¿æ®µï¼Œæœå‘ ~180 deg
+        target_angle = 180.0f;
+        base_speed = BASE_SPEED_STRAIGHT;
+    }
+    else if (count == 3)
+    {
+        // D->A: å·¦åŠåœ†å¼§ (é€†æ—¶é’ˆ 185 deg)
+        target_angle = LEFT_HALF_CIRCLE;   // +185
+        base_speed = BASE_SPEED_CURVE;
+    }
+    else if (count >= 4)
+    {
+        // å›åˆ° Aï¼Œåœè½¦
+        task_running = 0;
+        base_speed = 0;
+    }
 }
 //
 static void Run_Task_3(void)  
@@ -110,6 +127,6 @@ void Task_Dispatcher(void)
     }
     else 
     {
-        base_speed = 0; // ¦pªG?¦b¶]¥ô?¡A¦º?°ò?³t«×
+        base_speed = 0; // ï¿½pï¿½G?ï¿½bï¿½]ï¿½ï¿½?ï¿½Aï¿½ï¿½?ï¿½ï¿½?ï¿½tï¿½ï¿½
     }
 }
