@@ -10,6 +10,8 @@ extern uint8_t current_state;
 extern uint8_t last_line_status;
 extern uint8_t count;
 extern float current_angle;
+extern uint8_t count_debounce;
+extern int16_t ff_diff; // 前馈差速
 
 // �֤ߨ�??��
 void Task_Manager_Init(void); // ��?�޲z����l�� (?��?�Τ@��)

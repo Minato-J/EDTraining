@@ -230,10 +230,19 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		// == 判断计数 == 
 		if (task_running == 1)
         {
+            if (count_debounce > 0)
+            {
+                count_debounce--;
+            }
+
             uint8_t current_line = (line_sensor_data != 0x00);
             if (last_line_status == 1 && current_line == 0)
             {
-                count++;
+                if (count_debounce == 0)
+                {
+                    count++;
+                    count_debounce = 10; // DEBOUNCE_INIT (200ms)
+                }
             }
             last_line_status = current_line;
         }
@@ -274,8 +283,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
             static float turn_out_smooth = 0;
             turn_out_smooth = 0.3f * turn_out_smooth + 0.7f * turn_out;
 
-            target_v_left  = base_speed - (int16_t)turn_out_smooth;
-            target_v_right = base_speed + (int16_t)turn_out_smooth;
+            target_v_left  = base_speed + ff_diff - (int16_t)turn_out_smooth;
+            target_v_right = base_speed - ff_diff + (int16_t)turn_out_smooth;
         }
         else 
         {

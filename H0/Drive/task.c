@@ -9,18 +9,30 @@ extern int16_t base_speed;
 extern float Yaw_Offset;
 extern float current_angle;
 
-// ---- Task 2 参数 ----
+// ---- Task 2 & 3 参数 ----
 #define BASE_SPEED_STRAIGHT   60
-#define BASE_SPEED_CURVE      30
+#define BASE_SPEED_CURVE      40
 #define RIGHT_HALF_CIRCLE  (-185.0f)  // 右半圆目标角（B→C，顺时针）
 #define LEFT_HALF_CIRCLE   (+185.0f)  // 左半圆目标角（D→A，逆时针）
 #define YAW_THRESHOLD         8.0f    // 退出阈值（度）
+
+// ---- Task 3 参数 ----
+#define DIAG_AC_ANGLE   (-45.0f)   // A→C 对角线方向（左上→右下）
+#define DIAG_BD_ANGLE   (-135.0f)  // B→D 对角线方向（右上→左下）
 
 uint16_t selected_task = 1;
 uint16_t task_running = 0;
 uint8_t current_state = 0;
 uint8_t last_line_status = 0x00;
 uint8_t count = 0;            
+uint8_t lap_count = 0; // 任务4 圈数计数
+
+// ---- 节点计数去抖 ----
+#define DEBOUNCE_INIT 10 // 去抖窗口 10 * 20ms = 200ms
+uint8_t count_debounce = 0;
+
+// ---- 前馈差速 ----
+int16_t ff_diff = 0; // 左右轮前馈差速
 
 void Task_Manager_Init(void) {
     selected_task = 1;  //  one = 1
@@ -53,6 +65,8 @@ void Task_Key_Scan(void)
             current_state = 0;
             last_line_status = 0x00;
             count = 0;
+            count_debounce = 0;
+            lap_count = 0;
             task_running = 1; 
             while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET);
         }
@@ -78,100 +92,90 @@ static void Run_Task_1(void)
 //
 static void Run_Task_3(void)
 {
-    static uint16_t wait_tick = 0;
-
-    // 统一的角度误差计算
-    float err = target_angle - current_angle;
-    while (err > 180.0f)  err -= 360.0f;
-    while (err < -180.0f) err += 360.0f;
-    if (err < 0) err = -err;
-
-    // 弃用 count 做状态机，改用发车会自动清零的 current_state
-    switch (current_state)
+    if (count == 0)
     {
-        // ============================================================
-        // 状态 0: A点原地转动对齐角度 (-50.2度)
-        // ============================================================
-        case 0:
-            base_speed = 0;         // 原地不动
-            target_angle = -50.2f;  // A→C 精确对角线夹角
-
-            if (err < 3.0f) 
-            {
-                wait_tick++;
-                if (wait_tick >= 20) // 稳定保持约 200ms
-                {
-                    count = 0;       // 出发前清空计数
-                    current_state = 1; // 切换到状态 1：直线冲锋
-                    wait_tick = 0;
-                }
-            }
-            else { wait_tick = 0; }
-            break;
-
-        // ============================================================
-        // 状态 1: 直线全速冲向 C 点，等待撞线
-        // ============================================================
-        case 1:
-            target_angle = -50.2f;  
-            base_speed = 60;         
-
-            // 当小车在 TIM6 中撞击 C 点黑线导致 count 变成 1 时，切入下一状态
-            if (count >= 1) 
-            {
-                current_state = 2;   // 切换到状态 2：C点回正
-                wait_tick = 0;
-            }
-            break;
-
-        // ============================================================
-        // 状态 2: C点原地回正 (强制锁死 count = 1，防止晃动误触发)
-        // ============================================================
-        case 2:
-            base_speed = 0;         // 原地不动
-            target_angle = 0.0f;    // 角度回正
-            count = 1;              // 【核心】强行把 count 锁死在 1，无视任何传感器抖动
-
-            if (err < 3.0f) 
-            {
-                wait_tick++;
-                if (wait_tick >= 30) // 稳定保持约 300ms
-                {
-                    count = 1;       // 确保出发前 count 为 1
-                    current_state = 3; // 切换到状态 3：解锁并循迹
-                    wait_tick = 0;
-                }
-            }
-            else { wait_tick = 0; }
-            break;
-
-        // ============================================================
-        // 状态 3: 沿半圆弧循迹行驶，直到再次触线/离线让 count 变成 2
-        // ============================================================
-        case 3:
-            base_speed = 30;        // 赋予循迹基础速度
-            // 此时由于底层 line_sensor_data 不为 0x00，会自动进入摄像头循迹模式
-            
-            if (count >= 2) 
-            {
-                current_state = 4;   // 看到下一个点，去停车
-            }
-            break;
-
-        // ============================================================
-        // 状态 4: 任务结束，停车
-        // ============================================================
-        case 4:
-        default:
-            base_speed = 0;
-            task_running = 0;       // 关闭运行标志
-            current_state = 0;      // 复位状态
-            count = 0;              // 复位计数
-            wait_tick = 0;
-            break;
+        // A→C: 对角线直线段（左上→右下）
+        target_angle = DIAG_AC_ANGLE;
+        base_speed = BASE_SPEED_STRAIGHT;
+        ff_diff = 0;
+    }
+    else if (count == 1)
+    {
+        // C→B: 右半圆弧（顺时针）
+        target_angle = RIGHT_HALF_CIRCLE;
+        base_speed = BASE_SPEED_CURVE;
+        ff_diff = 10;
+    }
+    else if (count == 2)
+    {
+        // B→D: 对角线直线段（右上→左下）
+        target_angle = DIAG_BD_ANGLE;
+        base_speed = BASE_SPEED_STRAIGHT;
+        ff_diff = 0;
+    }
+    else if (count == 3)
+    {
+        // D→A: 左半圆弧（逆时针）
+        target_angle = LEFT_HALF_CIRCLE;
+        base_speed = BASE_SPEED_CURVE;
+        ff_diff = -10;
+    }
+    else if (count >= 4)
+    {
+        // 回到 A，停车
+        task_running = 0;
+        base_speed = 0;
+        ff_diff = 0;
     }
 }
 
+
+//
+static void Run_Task_4(void)
+{
+    if (count >= 4)
+    {
+        lap_count++;
+        if (lap_count >= 4)
+        {
+            // 跑完 4 圈，停车
+            task_running = 0;
+            base_speed = 0;
+            ff_diff = 0;
+            return;
+        }
+        else
+        {
+            // 没跑完，进入下一圈
+            count = 0;
+        }
+    }
+
+    if (count == 0)
+    {
+        target_angle = DIAG_AC_ANGLE;
+        base_speed = BASE_SPEED_STRAIGHT;
+        ff_diff = 0;
+    }
+    else if (count == 1)
+    {
+        target_angle = RIGHT_HALF_CIRCLE;
+        base_speed = BASE_SPEED_CURVE;
+        ff_diff = 10;
+    }
+    else if (count == 2)
+    {
+        target_angle = DIAG_BD_ANGLE;
+        base_speed = BASE_SPEED_STRAIGHT;
+        ff_diff = 0;
+    }
+    else if (count == 3)
+    {
+        target_angle = LEFT_HALF_CIRCLE;
+        base_speed = BASE_SPEED_CURVE;
+        ff_diff = -10;
+    }
+}
 
 //
 static void Run_Task_2(void)
@@ -181,25 +185,29 @@ static void Run_Task_2(void)
         case 0:
             // A→B 直线段，保持初始朝向
             target_angle = 0.0f;
-            base_speed = 60;
+            base_speed = BASE_SPEED_STRAIGHT;
+            ff_diff = 0;
             break;
 
         case 1:
             // B→C 右半圆弧，目标角度 -185°
-            //target_angle = -185.0f;
-            base_speed = 30;
+            target_angle = RIGHT_HALF_CIRCLE;
+            base_speed = BASE_SPEED_CURVE;
+            ff_diff = 10; // 差速前馈：右转，左轮快，右轮慢
             break;
 
         case 2:
             // C→D 直线段，朝向 180°
             target_angle = 180.0f;
-            base_speed = 60;
+            base_speed = BASE_SPEED_STRAIGHT;
+            ff_diff = 0;
             break;
 
         case 3:
             // D→A 左半圆弧，目标角度 +185°
-            //target_angle = 185.0f;
-            base_speed = 30;
+            target_angle = LEFT_HALF_CIRCLE;
+            base_speed = BASE_SPEED_CURVE;
+            ff_diff = -10; // 差速前馈：左转，右轮快，左轮慢
             break;
 
         case 4:
@@ -207,6 +215,7 @@ static void Run_Task_2(void)
             // 回到 A，停车
             task_running = 0;
             base_speed = 0;
+            ff_diff = 0;
             break;
     }
 }
@@ -220,7 +229,7 @@ void Task_Dispatcher(void)
             case 1: Run_Task_1(); break; 
             case 2: Run_Task_2(); break; 
             case 3: Run_Task_3(); break;
-//            case 4: Run_Task_4();  break;
+            case 4: Run_Task_4(); break;
         }
     }
     else 
