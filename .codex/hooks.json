@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash 'e:\\AI TEST\\Electronic Design Training\\.codex\\hooks\\protect-hal-keil.sh'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash 'e:\\AI TEST\\Electronic Design Training\\.codex\\hooks\\embedded-safety-check.sh'"
+          }
+        ]
+      }
+    ]
+  }
+}
