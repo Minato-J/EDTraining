@@ -13,4 +13,4 @@ args = [
 ]
 
 [mcp_servers.github.env]
-GITHUB_TOKEN = "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"
+
