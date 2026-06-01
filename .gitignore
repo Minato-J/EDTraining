@@ -4,6 +4,10 @@
 ZIP/
 .claude/
 .codex/
+.agents/
+docs/
+/AGENTS.md
+/CLAUDE.md
 
 # ====================
 # Keil MDK 编译产物
@@ -36,9 +40,9 @@ JLinkSettings.ini
 *.scvd
 
 # ====================
-# STM32CubeMX 生成（按需调整�?
+# STM32CubeMX 生成（按需调整�?
 # ====================
-# 如果使用 CubeMX 重新生成，这些文件会被覆�?
+# 如果使用 CubeMX 重新生成，这些文件会被覆�?
 # 取消下面注释则不跟踪 HAL 驱动
 # Drivers/CMSIS/
 # Drivers/STM32F4xx_HAL_Driver/
