@@ -55,8 +55,10 @@ PID_TypeDef pid_angle;
 float Yaw_Offset = 0;        
 float target_angle = 0;    
 float current_angle = 0;
-int16_t base_speed = 0;    
+int16_t base_speed = 0;
 float turn_out;
+extern uint8_t lap_count;
+extern uint8_t rotating;       // 旋转阶段标志 (task.c)
 
 /* USER CODE END PTD */
 
@@ -164,6 +166,8 @@ int main(void)
 	  OLED_ShowSignedNum(80, 16, task_running, 4, 16, 1);
 	  OLED_ShowSignedNum(48, 32, count, 4, 16, 1);
 	  OLED_Refresh();
+	  OLED_ShowSignedNum(48, 48, lap_count, 4, 16, 1);
+
 	  //printf("%d\r\n",selected_task);
       HAL_Delay(10);
     /* USER CODE END WHILE */
@@ -263,18 +267,40 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         // ================= 2. 核心大脑：控制权分配 (双模切换) =================
         if (task_running == 1)
         {
-            // 判断当前看到黑线了吗？
-            if (line_sensor_data == 0x00) 
+            // ---- 盲开超时保护: 连续 0x00 超过 1 秒触发紧急停车 ----
+            static uint8_t blind_ticks = 0;
+
+            if (rotating)
             {
-                // ---- 【模式 A：盲开模式】没有黑线，全白！听陀螺仪的，死死保住目标角度 ----
+                // ---- 【模式 R：旋转阶段】纯 IMU 角度环控制，完全无视 K230 ----
+                blind_ticks = 0;
                 float angle_error = target_angle - current_angle;
                 while (angle_error > 180.0f)  angle_error -= 360.0f;
                 while (angle_error < -180.0f) angle_error += 360.0f;
                 turn_out = PID_Compute(&pid_angle, angle_error, 0);
             }
-            else 
+            else if (line_sensor_data == 0x00)
+            {
+                // ---- 【模式 A：盲开模式】没有黑线，全白！听陀螺仪的，死死保住目标角度 ----
+                blind_ticks++;
+                if (blind_ticks > 50)  // 连续 1 秒无视野 → 紧急停车
+                {
+                    base_speed = 0;
+                    task_running = 0;
+                    blind_ticks = 0;
+                }
+                else
+                {
+                    float angle_error = target_angle - current_angle;
+                    while (angle_error > 180.0f)  angle_error -= 360.0f;
+                    while (angle_error < -180.0f) angle_error += 360.0f;
+                    turn_out = PID_Compute(&pid_angle, angle_error, 0);
+                }
+            }
+            else
             {
                 // ---- 【模式 B：循迹模式】看到黑线了！抛弃陀螺仪，听摄像头的！ ----
+                blind_ticks = 0;
                 // 同步目标角度，防止脱线切回盲开瞬间产生剧烈抽搐
                 target_angle = current_angle;
                 turn_out = K230_Get_Turn_Speed(line_sensor_data);
