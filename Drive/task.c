@@ -394,7 +394,7 @@ static void Run_Task_4(void)
             ff_diff = 0;
 
             if (count >= 4 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))   // 直道: count 为主
-
+            {
                 base_speed = 0;
                 count = 0;
                 current_state = 10;
