@@ -41,9 +41,17 @@ extern float current_angle;
 #define RIGHT_HALF_CIRCLE  (-185.0f)
 #define LEFT_HALF_CIRCLE   (+185.0f)
 #define YAW_THRESHOLD         8.0f
-// 对角线角度（供 Task 5 使用）
-#define DIAG_AC_ANGLE   (-45.0f)
-#define DIAG_BD_ANGLE   (-135.0f)
+// 对角线角度（供 Task 3/5 使用）
+#define DIAG_AC_ANGLE   (-38.0f)
+#define DIAG_BD_ANGLE   (-144.0f)
+
+// ---- Task 3 进弯刹车 / 出弯缓冲参数 ----
+#define SPEED_STRAIGHT       60    // 直道速度
+#define SPEED_CURVE_RUN      30    // 弯道循迹速度
+#define TICK_IN_BRAKE        10    // 进弯重刹持续 tick (10×20ms=200ms)
+#define SPEED_IN_BRAKE       0     // 进弯刹车速度 (点刹减速)
+#define TICK_OUT_BUFFER      8     // 出弯中速保护 tick (8×20ms=160ms)
+#define SPEED_OUT_BUFFER     40    // 出弯过渡速度 (给陀螺仪时间摆正车头)
 
 // ---- 节点计数去抖 (H0 基础设施) ----
 #define DEBOUNCE_INIT 10 // 去抖窗口 10 * 20ms = 200ms
@@ -164,134 +172,83 @@ static void Run_Task_2(void)
 }
 
 // ================================================================
-// Task 3: 赛题(3) A→C→B→D→A 1圈（9状态航点，来源: 第四问完成原 Run_Task_2）
+// Task 3: 赛题(3) A→C→B→D→A 1圈（count 驱动 + 进弯刹车/出弯缓冲）
+//         导航策略参考 0603 Run_Task_3
 // ================================================================
 static void Run_Task_3(void)
 {
-    switch(current_state)
+    static int t3_wait_tick = 0;
+    static int t3_last_count = -1;
+
+    // 【核心机制】count 改变时重置计时器
+    if (count != t3_last_count)
     {
-        // state 0: A点原地旋转 -> 目标 -38度
+        t3_wait_tick = 0;
+        t3_last_count = count;
+    }
+
+    switch (count)
+    {
         case 0:
-            rotating = 1;
-            base_speed = 0;
-            target_angle = -38.0f;
+            // ---------------- A→C 对角线段 ----------------
+            target_angle = DIAG_AC_ANGLE;  // -38°
+            base_speed = SPEED_STRAIGHT;   // 60
             ff_diff = 0;
-
-            wait_tick++;
-            if (wait_tick >= 10)    // 700ms
-            {
-                count = 0;
-                current_state = 1;
-                wait_tick = 0;
-                rotating = 0;
-            }
             break;
 
-        // state 1: 保持对角推进 -> 等待触发 C 点
         case 1:
-            target_angle = -38.0f;
-            base_speed = 60;
-            ff_diff = 0;
-
-            if (count >= 1)
+            // ---------------- C→B 段 (进弯刹车磨合期) ----------------
+            target_angle = 0.0f;
+            t3_wait_tick++;
+            if (t3_wait_tick <= TICK_IN_BRAKE)
             {
-                base_speed = 0;
-                current_state = 2;
+                base_speed = SPEED_IN_BRAKE;   // 进弯重刹
             }
+            else
+            {
+                base_speed = SPEED_CURVE_RUN;  // 正常循迹过弯
+            }
+            ff_diff = 0;
             break;
 
-        // state 2: C点原地扭头 -> 目标 0度
         case 2:
-            rotating = 1;
-            base_speed = 0;
-            target_angle = 0.0f;
-            count = 1;
-
-            wait_tick++;
-            if (wait_tick >= 10)
+            // ---------------- B→D 段 (进弯刹车) ----------------
+            target_angle = DIAG_BD_ANGLE;  // -144°
+            t3_wait_tick++;
+            if (t3_wait_tick <= TICK_IN_BRAKE)
             {
-                count = 1;
-                current_state = 3;
-                wait_tick = 0;
-                rotating = 0;
+                base_speed = SPEED_IN_BRAKE;
             }
+            else
+            {
+                base_speed = SPEED_CURVE_RUN;
+            }
+            ff_diff = 0;
             break;
 
-        // state 3: 保持 0 度推进 -> 等待 B 点
         case 3:
-            base_speed = 30;
-            target_angle = 0.0f;
-            ff_diff = 0;
-
-            if (count >= 2)
-            {
-                base_speed = 0;
-                current_state = 4;
-            }
-            break;
-
-        // state 4: B点原地大调头 -> 目标 -144度
-        case 4:
-            rotating = 1;
-            base_speed = 0;
-            target_angle = -144.0f;
-
-            wait_tick++;
-            if (wait_tick >= 10)
-            {
-                count = 2;
-                current_state = 5;
-                wait_tick = 0;
-                rotating = 0;
-            }
-            break;
-
-        // state 5: 保持对角返回 -> 等待 D 点
-        case 5:
-            base_speed = 60;
-            ff_diff = 0;
-
-            if (count >= 3)
-            {
-                base_speed = 0;
-                current_state = 6;
-            }
-            break;
-
-        // state 6: D点原地回正 -> 目标 180度
-        case 6:
-            rotating = 1;
-            base_speed = 0;
+            // ---------------- D→A 段 (进弯刹车) ----------------
             target_angle = 180.0f;
-            wait_tick++;
-            if (wait_tick >= 10)
+            t3_wait_tick++;
+            if (t3_wait_tick <= TICK_IN_BRAKE)
             {
-                count = 3;
-                current_state = 7;
-                wait_tick = 0;
-                rotating = 0;
+                base_speed = SPEED_IN_BRAKE;
             }
-            break;
-
-        // state 7: 直行冲向 A 点
-        case 7:
-            base_speed = 30;
+            else
+            {
+                base_speed = SPEED_CURVE_RUN;
+            }
             ff_diff = 0;
-
-            if (count >= 4)
-            {
-                current_state = 8;
-            }
             break;
 
-        // state 8 / 终点停车
-        case 8:
+        case 4:
         default:
-            base_speed = 0;
+            // 回到 A 点，停车
             task_running = 0;
-            current_state = 0;
+            base_speed = 0;
             count = 0;
-            wait_tick = 0;
+            t3_wait_tick = 0;
+            t3_last_count = -1;
             ff_diff = 0;
             break;
     }
@@ -352,10 +309,10 @@ static void Run_Task_4(void)
             }
             break;
 
-        // 状态 4: 第一圈 - B点换方向 -> 目标 -144度 (不停车)
+        // 状态 4: 第一圈 - B点换方向 -> 目标 -146度 (逐圈微调)
         case 4:
             base_speed = 60;
-            target_angle = -144.0f;
+            target_angle = -146.0f;
             count = 2;
             current_state = 5;
             break;
@@ -363,7 +320,7 @@ static void Run_Task_4(void)
         // 状态 5: 第一圈 - 保持对角返回 -> 等待 D 点
         case 5:
             base_speed = 60;
-            target_angle = -144.0f;
+            target_angle = -146.0f;
             ff_diff = 0;
 
             if (count >= 3)
@@ -401,17 +358,17 @@ static void Run_Task_4(void)
         // 【第二圈】 状态 10 ~ 17
         // ========================================================
 
-        // 状态 10: 第二圈 - A点起步 -> 目标 -38度 (不停车)
+        // 状态 10: 第二圈 - A点起步 -> 目标 -34度 (逐圈微调)
         case 10:
             base_speed = 60;
-            target_angle = -38.0f;
+            target_angle = -34.0f;
             count = 0;
             current_state = 11;
             break;
 
         // 状态 11: 第二圈 - 保持对角推进 -> 等待触发 C 点
         case 11:
-            target_angle = -38.0f;
+            target_angle = -34.0f;
             base_speed = 60;
 
             if (count >= 1)
@@ -441,10 +398,10 @@ static void Run_Task_4(void)
             }
             break;
 
-        // 状态 14: 第二圈 - B点换方向 -> 目标 -144度 (不停车)
+        // 状态 14: 第二圈 - B点换方向 -> 目标 -148度 (逐圈微调)
         case 14:
             base_speed = 60;
-            target_angle = -144.0f;
+            target_angle = -148.0f;
             count = 2;
             current_state = 15;
             break;
@@ -452,7 +409,7 @@ static void Run_Task_4(void)
         // 状态 15: 第二圈 - 保持对角返回 -> 等待 D 点
         case 15:
             base_speed = 60;
-            target_angle = -144.0f;
+            target_angle = -148.0f;
 
             if (count >= 3)
             {
@@ -488,17 +445,17 @@ static void Run_Task_4(void)
         // 【第三圈 - 最后一圈】 状态 20 ~ 28
         // ========================================================
 
-        // 状态 20: 第三圈 - A点起步 -> 目标 -38度 (不停车)
+        // 状态 20: 第三圈 - A点起步 -> 目标 -37度 (逐圈微调)
         case 20:
             base_speed = 60;
-            target_angle = -38.0f;
+            target_angle = -37.0f;
             count = 0;
             current_state = 21;
             break;
 
         // 状态 21: 第三圈 - 保持对角推进 -> 等待触发 C 点
         case 21:
-            target_angle = -38.0f;
+            target_angle = -37.0f;
             base_speed = 60;
 
             if (count >= 1)
@@ -528,10 +485,10 @@ static void Run_Task_4(void)
             }
             break;
 
-        // 状态 24: 第三圈 - B点换方向 -> 目标 -144度 (不停车)
+        // 状态 24: 第三圈 - B点换方向 -> 目标 -146度 (逐圈微调)
         case 24:
             base_speed = 60;
-            target_angle = -144.0f;
+            target_angle = -146.0f;
             count = 2;
             current_state = 25;
             break;

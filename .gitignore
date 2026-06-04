@@ -5,9 +5,36 @@ ZIP/
 .claude/
 .codex/
 .agents/
+.gemini/
+.codegraph/
+.mcp.json
 docs/
 /AGENTS.md
 /CLAUDE.md
+
+# ====================
+# 临时/草稿文件
+# ====================
+草稿.txt
+草稿*.txt
+*.tmp
+
+# ====================
+# Understand Anything 生成物
+# ====================
+.understand-anything/
+知识图谱.html
+
+# ====================
+# 旧版本备份
+# ====================
+H0-0603/
+
+# ====================
+# 分析报告（自动生成/临时）
+# ====================
+Analysis/changelog.md
+代码说明.md
 
 # ====================
 # Keil MDK 编译产物
