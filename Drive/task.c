@@ -73,7 +73,7 @@ uint16_t selected_task = 1;
 volatile uint16_t task_running = 0;     // volatile: ISR 写入（盲开超时停车），主循环读取
 uint8_t current_state = 0;
 uint8_t last_line_status = 0x00;
-volatile uint8_t count = 0;             // volatile: ISR 与主循环双重递增
+volatile uint16_t count = 0;             // volatile: ISR 与主循环双重递增；uint16_t 防 Task4 长时间溢出
 static uint16_t wait_tick = 0;
 
 void Task_Manager_Init(void) {
@@ -155,8 +155,10 @@ static void Run_Task_2(void)
     // 弯道段兜底：半圆弧 ~90° → 阈值 110° (P1#5: 按实际角度校准)
     // 加去抖窗口，防止 ISR 中 count++ 与此处竞争导致跳过路段
     if ((count == 1 || count == 3) && YawTrack_IsCurveDone(YAW_THRESH_HALF_ARC)) {
+        __disable_irq();   // P2#7: 保护 count++ + count_debounce 原子性
         count++;
         count_debounce = DEBOUNCE_INIT;
+        __enable_irq();
     }
 
     switch (count)
@@ -223,8 +225,10 @@ static void Run_Task_3(void)
     if (count == 1 || count == 2 || count == 3) {
         float yt = (count == 2) ? YAW_THRESH_DIAG : YAW_THRESH_SMALL_ARC;
         if (YawTrack_IsCurveDone(yt)) {
+            __disable_irq();   // P2#7: 保护 count++ + count_debounce 原子性
             count++;
             count_debounce = DEBOUNCE_INIT;
+            __enable_irq();
         }
     }
 
@@ -627,8 +631,10 @@ static void Run_Task_5(void)
     // 弯道段兜底：半圆弧 ~90° → 阈值 110° (P1#5: 按实际角度校准)
     // 加去抖窗口，防止 ISR 中 count++ 与此处竞争导致跳过路段
     if ((count == 1 || count == 3) && YawTrack_IsCurveDone(YAW_THRESH_HALF_ARC)) {
+        __disable_irq();   // P2#7: 保护 count++ + count_debounce 原子性
         count++;
         count_debounce = DEBOUNCE_INIT;
+        __enable_irq();
     }
 
     if (count == 0)

@@ -8,7 +8,7 @@ extern uint16_t selected_task;
 extern volatile uint16_t task_running;     // volatile: ISR 写入（盲开超时停车），主循环读取
 extern uint8_t current_state;
 extern uint8_t last_line_status;
-extern volatile uint8_t count;             // volatile: ISR 与主循环双重递增
+extern volatile uint16_t count;             // volatile: ISR 与主循环双重递增；uint16_t 防 Task4 长时间溢出
 extern uint8_t lap_count;
 extern float current_angle;
 extern volatile uint8_t count_debounce;    // volatile: ISR 与主循环同时写入去抖窗口
