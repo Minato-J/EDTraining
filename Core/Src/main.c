@@ -33,6 +33,7 @@
 #include "k230_track.h"
 #include "task.h"
 #include "oled.h"
+#include "yaw_track.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -167,6 +168,7 @@ int main(void)
 	  OLED_ShowSignedNum(48, 32, count, 4, 16, 1);
 	  OLED_Refresh();
 	  OLED_ShowSignedNum(48, 48, lap_count, 4, 16, 1);
+	  OLED_ShowSignedNum(48, 56, (int16_t)YawTrack_GetCumulative(), 4, 16, 1);
 
 	  //printf("%d\r\n",selected_task);
       HAL_Delay(10);
@@ -258,12 +260,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         float diff = raw_yaw - last_valid_angle;
         while (diff > 180.0f)  diff -= 360.0f;
         while (diff < -180.0f) diff += 360.0f;
-        if (fabs(diff) > 30.0f && last_valid_angle != 0) {
+        if (fabsf(diff) > 30.0f && last_valid_angle != 0) {
             current_angle = last_valid_angle; 
         } else {
-            current_angle = raw_yaw;         
+            current_angle = raw_yaw;
             last_valid_angle = raw_yaw;
         }
+        // yaw_cumulative 追踪：每帧累加航向变化量
+        YawTrack_Update(current_angle);
         // ================= 2. 核心大脑：控制权分配 (双模切换) =================
         if (task_running == 1)
         {

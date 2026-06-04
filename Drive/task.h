@@ -1,7 +1,7 @@
 #ifndef __TASK_H
 #define __TASK_H
 
-#include "stdint.h"
+#include <stdint.h>
 
 // 与 main.c 共享的全局变量
 extern uint16_t selected_task;

@@ -28,6 +28,7 @@
 #include "wit_imu.h"
 #include "k230_track.h"
 #include "math.h"
+#include "yaw_track.h"
 
 extern float target_angle;
 extern int16_t base_speed;
@@ -102,6 +103,7 @@ void Task_Key_Scan(void)
             count = 0;
             count_debounce = 0;
             lap_count = 0;
+            YawTrack_Reset(current_angle);
             task_running = 1;
             while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET);
         }
@@ -131,6 +133,24 @@ static void Run_Task_1(void)
 // ================================================================
 static void Run_Task_2(void)
 {
+    static int t2_last_count = -1;
+
+    // 检测 count 变化：首次进入新路段时调用 Reset
+    if (count != t2_last_count)
+    {
+        t2_last_count = count;
+        // 进入弯道段时重置角度累计追踪
+        if (count == 1 || count == 3)
+            YawTrack_Reset(current_angle);
+    }
+
+    // 弯道段兜底：累计角度 > 200° 时强制推进
+    // 加去抖窗口，防止 ISR 中 count++ 与此处竞争导致跳过路段
+    if ((count == 1 || count == 3) && YawTrack_IsCurveDone(200.0f)) {
+        count++;
+        count_debounce = DEBOUNCE_INIT;
+    }
+
     switch (count)
     {
         case 0:
@@ -180,11 +200,21 @@ static void Run_Task_3(void)
     static int t3_wait_tick = 0;
     static int t3_last_count = -1;
 
-    // 【核心机制】count 改变时重置计时器
+    // 【核心机制】count 改变时重置计时器和角度追踪
     if (count != t3_last_count)
     {
         t3_wait_tick = 0;
         t3_last_count = count;
+        // 进入弯道段时重置角度累计追踪
+        if (count == 1 || count == 2 || count == 3)
+            YawTrack_Reset(current_angle);
+    }
+
+    // 弯道段兜底：累计角度 > 180° 时强制推进
+    // 加去抖窗口，防止 ISR 中 count++ 与此处竞争导致跳过路段
+    if ((count == 1 || count == 2 || count == 3) && YawTrack_IsCurveDone(180.0f)) {
+        count++;
+        count_debounce = DEBOUNCE_INIT;
     }
 
     switch (count)
@@ -272,6 +302,7 @@ static void Run_Task_4(void)
             target_angle = -38.0f;
             ff_diff = 0;
             count = 0;
+            YawTrack_Reset(current_angle);
             current_state = 1;
             break;
 
@@ -281,7 +312,7 @@ static void Run_Task_4(void)
             base_speed = 60;
             ff_diff = 0;
 
-            if (count >= 1)
+            if (count >= 1 || YawTrack_IsCurveDone(180.0f))
             {
                 base_speed = 0;
                 current_state = 2;
@@ -293,6 +324,7 @@ static void Run_Task_4(void)
             base_speed = 30;
             target_angle = 0.0f;
             count = 1;
+            YawTrack_Reset(current_angle);
             current_state = 3;
             break;
 
@@ -302,7 +334,7 @@ static void Run_Task_4(void)
             target_angle = 0.0f;
             ff_diff = 0;
 
-            if (count >= 2)
+            if (count >= 2 || YawTrack_IsCurveDone(180.0f))
             {
                 base_speed = 0;
                 current_state = 4;
@@ -314,6 +346,7 @@ static void Run_Task_4(void)
             base_speed = 60;
             target_angle = -146.0f;
             count = 2;
+            YawTrack_Reset(current_angle);
             current_state = 5;
             break;
 
@@ -323,7 +356,7 @@ static void Run_Task_4(void)
             target_angle = -146.0f;
             ff_diff = 0;
 
-            if (count >= 3)
+            if (count >= 3 || YawTrack_IsCurveDone(180.0f))
             {
                 base_speed = 0;
                 current_state = 6;
@@ -335,6 +368,7 @@ static void Run_Task_4(void)
             base_speed = 30;
             target_angle = 180.0f;
             count = 3;
+            YawTrack_Reset(current_angle);
             current_state = 7;
             break;
 
@@ -344,7 +378,7 @@ static void Run_Task_4(void)
             target_angle = 180.0f;
             ff_diff = 0;
 
-            if (count >= 4)
+            if (count >= 4 || YawTrack_IsCurveDone(180.0f))
             {
                 base_speed = 0;
                 count = 0;
@@ -363,6 +397,7 @@ static void Run_Task_4(void)
             base_speed = 60;
             target_angle = -34.0f;
             count = 0;
+            YawTrack_Reset(current_angle);
             current_state = 11;
             break;
 
@@ -371,7 +406,7 @@ static void Run_Task_4(void)
             target_angle = -34.0f;
             base_speed = 60;
 
-            if (count >= 1)
+            if (count >= 1 || YawTrack_IsCurveDone(180.0f))
             {
                 base_speed = 0;
                 current_state = 12;
@@ -383,6 +418,7 @@ static void Run_Task_4(void)
             base_speed = 30;
             target_angle = 0.0f;
             count = 1;
+            YawTrack_Reset(current_angle);
             current_state = 13;
             break;
 
@@ -391,7 +427,7 @@ static void Run_Task_4(void)
             base_speed = 30;
             target_angle = 0.0f;
 
-            if (count >= 2)
+            if (count >= 2 || YawTrack_IsCurveDone(180.0f))
             {
                 base_speed = 0;
                 current_state = 14;
@@ -403,6 +439,7 @@ static void Run_Task_4(void)
             base_speed = 60;
             target_angle = -148.0f;
             count = 2;
+            YawTrack_Reset(current_angle);
             current_state = 15;
             break;
 
@@ -411,7 +448,7 @@ static void Run_Task_4(void)
             base_speed = 60;
             target_angle = -148.0f;
 
-            if (count >= 3)
+            if (count >= 3 || YawTrack_IsCurveDone(180.0f))
             {
                 base_speed = 0;
                 current_state = 16;
@@ -423,6 +460,7 @@ static void Run_Task_4(void)
             base_speed = 30;
             target_angle = 180.0f;
             count = 3;
+            YawTrack_Reset(current_angle);
             current_state = 17;
             break;
 
@@ -431,7 +469,7 @@ static void Run_Task_4(void)
             base_speed = 30;
             target_angle = 180.0f;
 
-            if (count >= 4)
+            if (count >= 4 || YawTrack_IsCurveDone(180.0f))
             {
                 base_speed = 0;
                 count = 0;
@@ -450,6 +488,7 @@ static void Run_Task_4(void)
             base_speed = 60;
             target_angle = -37.0f;
             count = 0;
+            YawTrack_Reset(current_angle);
             current_state = 21;
             break;
 
@@ -458,7 +497,7 @@ static void Run_Task_4(void)
             target_angle = -37.0f;
             base_speed = 60;
 
-            if (count >= 1)
+            if (count >= 1 || YawTrack_IsCurveDone(180.0f))
             {
                 base_speed = 0;
                 current_state = 22;
@@ -470,6 +509,7 @@ static void Run_Task_4(void)
             base_speed = 30;
             target_angle = 0.0f;
             count = 1;
+            YawTrack_Reset(current_angle);
             current_state = 23;
             break;
 
@@ -478,7 +518,7 @@ static void Run_Task_4(void)
             base_speed = 30;
             target_angle = 0.0f;
 
-            if (count >= 2)
+            if (count >= 2 || YawTrack_IsCurveDone(180.0f))
             {
                 base_speed = 0;
                 current_state = 24;
@@ -490,6 +530,7 @@ static void Run_Task_4(void)
             base_speed = 60;
             target_angle = -146.0f;
             count = 2;
+            YawTrack_Reset(current_angle);
             current_state = 25;
             break;
 
@@ -499,7 +540,7 @@ static void Run_Task_4(void)
             base_speed = 60;
             target_angle = -147.0f;
 
-            if (count >= 3)
+            if (count >= 3 || YawTrack_IsCurveDone(180.0f))
             {
                 base_speed = 0;
                 current_state = 26;
@@ -511,6 +552,7 @@ static void Run_Task_4(void)
             base_speed = 30;
             target_angle = 180.0f;
             count = 3;
+            YawTrack_Reset(current_angle);
             current_state = 27;
             break;
 
@@ -519,7 +561,7 @@ static void Run_Task_4(void)
             base_speed = 30;
             target_angle = 180.0f;
 
-            if (count >= 4)
+            if (count >= 4 || YawTrack_IsCurveDone(180.0f))
             {
                 base_speed = 0;
                 current_state = 28;
@@ -543,6 +585,16 @@ static void Run_Task_4(void)
 // ================================================================
 static void Run_Task_5(void)
 {
+    static int t5_last_count = -1;
+
+    // 检测 count 变化：首次进入新路段时调用 Reset
+    if (count != t5_last_count)
+    {
+        t5_last_count = count;
+        if (count == 1 || count == 3)
+            YawTrack_Reset(current_angle);
+    }
+
     if (count >= 4)
     {
         lap_count++;
@@ -552,12 +604,20 @@ static void Run_Task_5(void)
             base_speed = 0;
             ff_diff = 0;
             lap_count = 0;
+            t5_last_count = -1;
             return;
         }
         else
         {
             count = 0;
         }
+    }
+
+    // 弯道段兜底：累计角度 > 200° 时强制推进
+    // 加去抖窗口，防止 ISR 中 count++ 与此处竞争导致跳过路段
+    if ((count == 1 || count == 3) && YawTrack_IsCurveDone(200.0f)) {
+        count++;
+        count_debounce = DEBOUNCE_INIT;
     }
 
     if (count == 0)
