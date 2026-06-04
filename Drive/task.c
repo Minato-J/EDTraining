@@ -34,6 +34,7 @@ extern float target_angle;
 extern int16_t base_speed;
 extern float Yaw_Offset;
 extern float current_angle;
+extern uint8_t angle_initialized;    // main.c 中角度过滤器哨兵 (P0#2 fix)
 
 // ---- 通用参数 ----
 #define BASE_SPEED_STRAIGHT   60
@@ -56,7 +57,7 @@ extern float current_angle;
 
 // ---- 节点计数去抖 (H0 基础设施) ----
 #define DEBOUNCE_INIT 10 // 去抖窗口 10 * 20ms = 200ms
-uint8_t count_debounce = 0;
+volatile uint8_t count_debounce = 0;     // volatile: ISR 与主循环同时写入
 
 // ---- 前馈差速 (H0 基础设施) ----
 int16_t ff_diff = 0;
@@ -64,10 +65,10 @@ int16_t ff_diff = 0;
 uint8_t lap_count = 0;
 uint8_t rotating = 0;              // 1=正在原地旋转，屏蔽 K230
 uint16_t selected_task = 1;
-uint16_t task_running = 0;
+volatile uint16_t task_running = 0;     // volatile: ISR 写入（盲开超时停车），主循环读取
 uint8_t current_state = 0;
 uint8_t last_line_status = 0x00;
-uint8_t count = 0;
+volatile uint8_t count = 0;             // volatile: ISR 与主循环双重递增
 static uint16_t wait_tick = 0;
 
 void Task_Manager_Init(void) {
@@ -103,6 +104,7 @@ void Task_Key_Scan(void)
             count = 0;
             count_debounce = 0;
             lap_count = 0;
+            angle_initialized = 0;   // P0#2: 角度过滤器哨兵归零，首帧无条件建立基线
             YawTrack_Reset(current_angle);
             task_running = 1;
             while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET);

@@ -58,6 +58,7 @@ float target_angle = 0;
 float current_angle = 0;
 int16_t base_speed = 0;
 float turn_out;
+uint8_t angle_initialized = 0;   // 角度过滤器哨兵—任务启动时由 task.c 清零
 extern uint8_t lap_count;
 extern uint8_t rotating;       // 旋转阶段标志 (task.c)
 
@@ -254,15 +255,23 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         }
         // ================= 1. 数据清洗：角度突变过滤器 =================
         static float last_valid_angle = 0;
-        
+
         // 减去 Yaw_Offset，让发车时按下按键后的零点生效！
-        float raw_yaw = IMU_Data.Yaw - Yaw_Offset; 
+        float raw_yaw = IMU_Data.Yaw - Yaw_Offset;
         float diff = raw_yaw - last_valid_angle;
         while (diff > 180.0f)  diff -= 360.0f;
         while (diff < -180.0f) diff += 360.0f;
-        if (fabsf(diff) > 30.0f && last_valid_angle != 0) {
-            current_angle = last_valid_angle; 
+
+        if (!angle_initialized) {
+            // │ 首个有效读数：无条件接受，建立基线
+            current_angle = raw_yaw;
+            last_valid_angle = raw_yaw;
+            angle_initialized = 1;
+        } else if (fabsf(diff) > 30.0f) {
+            // │ 突变尖峰：丢弃，保持上次有效值
+            current_angle = last_valid_angle;
         } else {
+            // │ 正常读数：接受并更新
             current_angle = raw_yaw;
             last_valid_angle = raw_yaw;
         }
