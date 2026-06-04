@@ -59,6 +59,8 @@ float current_angle = 0;
 int16_t base_speed = 0;
 float turn_out;
 uint8_t angle_initialized = 0;   // 角度过滤器哨兵—任务启动时由 task.c 清零
+volatile uint8_t blind_ticks = 0;      // P1#3: ISR盲开超时计数，提升为文件级供 Start 清零
+volatile float turn_out_smooth = 0;    // P2#5: ISR转弯平滑值，提升为文件级供 Start 清零
 extern uint8_t lap_count;
 extern uint8_t rotating;       // 旋转阶段标志 (task.c)
 
@@ -227,6 +229,18 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+// ControlState_Reset: 任务启动时清零 ISR 的累积状态，防止上次运行残留
+// P1#3: blind_ticks 归零 → 下次 Start 不会从旧值续计
+// P2#5: turn_out_smooth 归零 → 新任务首帧差速不受旧转弯量污染
+// P2#8: PID 状态重置 → 积分/上次误差/输出归零
+void ControlState_Reset(void) {
+    blind_ticks = 0;
+    turn_out_smooth = 0;
+    PID_Init(&pid_left, 0.9f, 0.12f, 0.0f, 500.0f);
+    PID_Init(&pid_right, 0.8f, 0.12f, 0.0f, 500.0f);
+    PID_Init(&pid_angle, 1.2f, 0.0f, 0.6f, 40.0f);
+}
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 	// 判断是不是我们用来做 PID 的 TIM6
@@ -253,11 +267,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
             }
             last_line_status = current_line;
         }
-        // ================= 1. 数据清洗：角度突变过滤器 =================
+        // ================= 1. 数据清洗：角度突变过滤器 + NaN 哨兵 =================
         static float last_valid_angle = 0;
 
         // 减去 Yaw_Offset，让发车时按下按键后的零点生效！
         float raw_yaw = IMU_Data.Yaw - Yaw_Offset;
+
+        // NaN 入口哨兵: 一旦进入 current_angle 永久污染 YawTrack + PID integral
+        // x != x 是 IEEE 754 惯用法，NaN 是唯一不满足自反性的值
+        if (raw_yaw != raw_yaw) goto skip_angle_update;
         float diff = raw_yaw - last_valid_angle;
         while (diff > 180.0f)  diff -= 360.0f;
         while (diff < -180.0f) diff += 360.0f;
@@ -277,11 +295,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         }
         // yaw_cumulative 追踪：每帧累加航向变化量
         YawTrack_Update(current_angle);
+        skip_angle_update:   // NaN 哨兵跳转点：跳过本帧角度更新但继续执行控制
         // ================= 2. 核心大脑：控制权分配 (双模切换) =================
         if (task_running == 1)
         {
             // ---- 盲开超时保护: 连续 0x00 超过 1 秒触发紧急停车 ----
-            static uint8_t blind_ticks = 0;
+            // blind_ticks 已提升为文件级变量 (P1#3: Start 时清零)
 
             if (rotating)
             {
@@ -319,7 +338,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
                 turn_out = K230_Get_Turn_Speed(line_sensor_data);
             }
             // ================= 3. turn_out 平滑滤波 (防抖) =================
-            static float turn_out_smooth = 0;
+            // turn_out_smooth 已提升为文件级变量 (P2#5: Start 时清零)
             turn_out_smooth = 0.3f * turn_out_smooth + 0.7f * turn_out;
 
             target_v_left  = base_speed + ff_diff - (int16_t)turn_out_smooth;

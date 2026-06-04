@@ -53,7 +53,7 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-
+void ControlState_Reset(void);   // P1+P2: 任务启动时清零 ISR 累积状态
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

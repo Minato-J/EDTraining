@@ -1,4 +1,5 @@
 #include "pid.h"
+#include <math.h>
 
 void PID_Init(PID_TypeDef *pid, float p, float i, float d, float max) {
     pid->Kp = p; pid->Ki = i; pid->Kd = d;
@@ -8,24 +9,30 @@ void PID_Init(PID_TypeDef *pid, float p, float i, float d, float max) {
 }
 
 float PID_Compute(PID_TypeDef *pid, float target, float measured) {
+    // NaN å“¨å…µ: NaN ä¸€æ—¦è¿›å…¥ integral åˆ™æ°¸ä¹…æ±¡æŸ“ï¼Œå”¯ä¸€æ¢å¤æ˜¯ç¡¬ä»¶å¤ä½
+    // NaN > X / NaN < X / NaN == X å…¨éƒ¨è¿”å›ž falseï¼Œä¼šç»•è¿‡æ‰€æœ‰é™å¹…å®ˆå«
+    if (isnan(target) || isnan(measured)) {
+        return pid->output;  // ä¿æŒä¸Šæ¬¡è¾“å‡ºï¼Œä¸æ›´æ–°å†…éƒ¨çŠ¶æ€
+    }
+
     pid->target = target;
     pid->error = pid->target - measured;
     
-    // ?¤À²Ö¥[
+    // ?ï¿½ï¿½ï¿½Ö¥[
     pid->integral += pid->error;
     
-    // ??ªº?¤À§Ü?©M¡]­­´T¡^
+    // ??ï¿½ï¿½?ï¿½ï¿½ï¿½ï¿½?ï¿½Mï¿½]ï¿½ï¿½ï¿½Tï¿½^
     if (pid->integral > pid->out_max) pid->integral = pid->out_max;
     if (pid->integral < -pid->out_max) pid->integral = -pid->out_max;
     
-    // ?ºâ?¥X
+    // ?ï¿½ï¿½?ï¿½X
     pid->output = (pid->Kp * pid->error) + 
                   (pid->Ki * pid->integral) + 
                   (pid->Kd * (pid->error - pid->last_error));
     
     pid->last_error = pid->error;
     
-    // ?¥X­­´T (Óì°t§Aªº ARR=100)
+    // ?ï¿½Xï¿½ï¿½ï¿½T (ï¿½ï¿½tï¿½Aï¿½ï¿½ ARR=100)
     if (pid->output > pid->out_max) pid->output = pid->out_max;
     if (pid->output < -pid->out_max) pid->output = -pid->out_max;
     

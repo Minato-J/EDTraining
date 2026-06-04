@@ -53,7 +53,12 @@ extern uint8_t angle_initialized;    // main.c 中角度过滤器哨兵 (P0#2 fi
 #define TICK_IN_BRAKE        10    // 进弯重刹持续 tick (10×20ms=200ms)
 #define SPEED_IN_BRAKE       0     // 进弯刹车速度 (点刹减速)
 #define TICK_OUT_BUFFER      8     // 出弯中速保护 tick (8×20ms=160ms)
-#define SPEED_OUT_BUFFER     40    // 出弯过渡速度 (给陀螺仪时间摆正车头)
+// ---- YawTrack 弧段角度阈值 (P1#5: 按实际角度校准，取代一刀切 180°/200°) ----
+// 场地参数: 圆弧半径 40cm，半圆弧理论偏航 ≈90°，小弧段 ≈36-50°，对角线 ≈38°/144°
+#define YAW_THRESH_HALF_ARC   110.0f   // 半圆弧 (Task 2/5): ~90° + 20° 余量
+#define YAW_THRESH_SMALL_ARC   60.0f   // 小弧段 (Task 3/4 C→B, D→A): ~36-50° + 余量
+#define YAW_THRESH_DIAG       170.0f   // 对角线 (Task 3/4 AC/BD): 38°/144° + 余量
+#define YAW_THRESH_SHORT_ARC   60.0f   // 短弧段 (Task 4 过渡): ~36° + 余量
 
 // ---- 节点计数去抖 (H0 基础设施) ----
 #define DEBOUNCE_INIT 10 // 去抖窗口 10 * 20ms = 200ms
@@ -105,6 +110,7 @@ void Task_Key_Scan(void)
             count_debounce = 0;
             lap_count = 0;
             angle_initialized = 0;   // P0#2: 角度过滤器哨兵归零，首帧无条件建立基线
+            ControlState_Reset();    // P1+P2: 清零blind_ticks + turn_out_smooth + PID
             YawTrack_Reset(current_angle);
             task_running = 1;
             while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET);
@@ -146,9 +152,9 @@ static void Run_Task_2(void)
             YawTrack_Reset(current_angle);
     }
 
-    // 弯道段兜底：累计角度 > 200° 时强制推进
+    // 弯道段兜底：半圆弧 ~90° → 阈值 110° (P1#5: 按实际角度校准)
     // 加去抖窗口，防止 ISR 中 count++ 与此处竞争导致跳过路段
-    if ((count == 1 || count == 3) && YawTrack_IsCurveDone(200.0f)) {
+    if ((count == 1 || count == 3) && YawTrack_IsCurveDone(YAW_THRESH_HALF_ARC)) {
         count++;
         count_debounce = DEBOUNCE_INIT;
     }
@@ -212,11 +218,14 @@ static void Run_Task_3(void)
             YawTrack_Reset(current_angle);
     }
 
-    // 弯道段兜底：累计角度 > 180° 时强制推进
-    // 加去抖窗口，防止 ISR 中 count++ 与此处竞争导致跳过路段
-    if ((count == 1 || count == 2 || count == 3) && YawTrack_IsCurveDone(180.0f)) {
-        count++;
-        count_debounce = DEBOUNCE_INIT;
+    // 弯道段兜底：按各弧段实际角度校准阈值 (P1#5)
+    // count==1 C→B ~38°→60°, count==2 B→D ~144°→170°, count==3 D→A ~36°→60°
+    if (count == 1 || count == 2 || count == 3) {
+        float yt = (count == 2) ? YAW_THRESH_DIAG : YAW_THRESH_SMALL_ARC;
+        if (YawTrack_IsCurveDone(yt)) {
+            count++;
+            count_debounce = DEBOUNCE_INIT;
+        }
     }
 
     switch (count)
@@ -308,13 +317,13 @@ static void Run_Task_4(void)
             current_state = 1;
             break;
 
-        // 状态 1: 第一圈 - 保持对角推进 -> 等待触发 C 点
+        // 状态 1: 第一圈 - 保持对角推进 A→C (~38°) -> 等待触发 C 点
         case 1:
             target_angle = -38.0f;
             base_speed = 60;
             ff_diff = 0;
 
-            if (count >= 1 || YawTrack_IsCurveDone(180.0f))
+            if (count >= 1 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
                 base_speed = 0;
                 current_state = 2;
@@ -330,13 +339,13 @@ static void Run_Task_4(void)
             current_state = 3;
             break;
 
-        // 状态 3: 第一圈 - 保持 0 度推进 -> 等待 B 点
+        // 状态 3: 第一圈 - 保持 0 度推进 C→B (~50°) -> 等待 B 点
         case 3:
             base_speed = 30;
             target_angle = 0.0f;
             ff_diff = 0;
 
-            if (count >= 2 || YawTrack_IsCurveDone(180.0f))
+            if (count >= 2 || YawTrack_IsCurveDone(YAW_THRESH_SMALL_ARC))
             {
                 base_speed = 0;
                 current_state = 4;
@@ -352,13 +361,13 @@ static void Run_Task_4(void)
             current_state = 5;
             break;
 
-        // 状态 5: 第一圈 - 保持对角返回 -> 等待 D 点
+        // 状态 5: 第一圈 - 保持对角返回 B→D (~144°) -> 等待 D 点
         case 5:
             base_speed = 60;
             target_angle = -146.0f;
             ff_diff = 0;
 
-            if (count >= 3 || YawTrack_IsCurveDone(180.0f))
+            if (count >= 3 || YawTrack_IsCurveDone(YAW_THRESH_DIAG))
             {
                 base_speed = 0;
                 current_state = 6;
@@ -374,14 +383,14 @@ static void Run_Task_4(void)
             current_state = 7;
             break;
 
-        // 状态 7: 第一圈 - 直行冲向 A 点 -> 触发后切入第二圈
+        // 状态 7: 第一圈 - 直行冲向 A 点 (直道 ~0°) -> 触发后切入第二圈
         case 7:
             base_speed = 30;
             target_angle = 180.0f;
             ff_diff = 0;
 
-            if (count >= 4 || YawTrack_IsCurveDone(180.0f))
-            {
+            if (count >= 4 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))   // 直道: count 为主
+
                 base_speed = 0;
                 count = 0;
                 current_state = 10;
@@ -403,12 +412,12 @@ static void Run_Task_4(void)
             current_state = 11;
             break;
 
-        // 状态 11: 第二圈 - 保持对角推进 -> 等待触发 C 点
+        // 状态 11: 第二圈 - 保持对角推进 A→C (~34°) -> 等待触发 C 点
         case 11:
             target_angle = -34.0f;
             base_speed = 60;
 
-            if (count >= 1 || YawTrack_IsCurveDone(180.0f))
+            if (count >= 1 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
                 base_speed = 0;
                 current_state = 12;
@@ -424,12 +433,12 @@ static void Run_Task_4(void)
             current_state = 13;
             break;
 
-        // 状态 13: 第二圈 - 保持 0 度推进 -> 等待 B 点
+        // 状态 13: 第二圈 - 保持 0 度推进 C→B (~50°) -> 等待 B 点
         case 13:
             base_speed = 30;
             target_angle = 0.0f;
 
-            if (count >= 2 || YawTrack_IsCurveDone(180.0f))
+            if (count >= 2 || YawTrack_IsCurveDone(YAW_THRESH_SMALL_ARC))
             {
                 base_speed = 0;
                 current_state = 14;
@@ -445,12 +454,12 @@ static void Run_Task_4(void)
             current_state = 15;
             break;
 
-        // 状态 15: 第二圈 - 保持对角返回 -> 等待 D 点
+        // 状态 15: 第二圈 - 保持对角返回 B→D (~148°) -> 等待 D 点
         case 15:
             base_speed = 60;
             target_angle = -148.0f;
 
-            if (count >= 3 || YawTrack_IsCurveDone(180.0f))
+            if (count >= 3 || YawTrack_IsCurveDone(YAW_THRESH_DIAG))
             {
                 base_speed = 0;
                 current_state = 16;
@@ -466,12 +475,12 @@ static void Run_Task_4(void)
             current_state = 17;
             break;
 
-        // 状态 17: 第二圈 - 直行冲向 A 点 -> 触发后切入最后一圈
+        // 状态 17: 第二圈 - 直行冲向 A 点 (直道 ~0°) -> 触发后切入最后一圈
         case 17:
             base_speed = 30;
             target_angle = 180.0f;
 
-            if (count >= 4 || YawTrack_IsCurveDone(180.0f))
+            if (count >= 4 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
                 base_speed = 0;
                 count = 0;
@@ -494,12 +503,12 @@ static void Run_Task_4(void)
             current_state = 21;
             break;
 
-        // 状态 21: 第三圈 - 保持对角推进 -> 等待触发 C 点
+        // 状态 21: 第三圈 - 保持对角推进 A→C (~37°) -> 等待触发 C 点
         case 21:
             target_angle = -37.0f;
             base_speed = 60;
 
-            if (count >= 1 || YawTrack_IsCurveDone(180.0f))
+            if (count >= 1 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
                 base_speed = 0;
                 current_state = 22;
@@ -515,12 +524,12 @@ static void Run_Task_4(void)
             current_state = 23;
             break;
 
-        // 状态 23: 第三圈 - 保持 0 度推进 -> 等待 B 点
+        // 状态 23: 第三圈 - 保持 0 度推进 C→B (~50°) -> 等待 B 点
         case 23:
             base_speed = 30;
             target_angle = 0.0f;
 
-            if (count >= 2 || YawTrack_IsCurveDone(180.0f))
+            if (count >= 2 || YawTrack_IsCurveDone(YAW_THRESH_SMALL_ARC))
             {
                 base_speed = 0;
                 current_state = 24;
@@ -536,13 +545,13 @@ static void Run_Task_4(void)
             current_state = 25;
             break;
 
-        // 状态 25: 第三圈 - 保持对角返回 -> 等待 D 点
+        // 状态 25: 第三圈 - 保持对角返回 B→D (~147°) -> 等待 D 点
         //          (最后一圈 angle 微调为 -147°)
         case 25:
             base_speed = 60;
             target_angle = -147.0f;
 
-            if (count >= 3 || YawTrack_IsCurveDone(180.0f))
+            if (count >= 3 || YawTrack_IsCurveDone(YAW_THRESH_DIAG))
             {
                 base_speed = 0;
                 current_state = 26;
@@ -558,12 +567,12 @@ static void Run_Task_4(void)
             current_state = 27;
             break;
 
-        // 状态 27: 第三圈 - 直行冲向终点 A 点
+        // 状态 27: 第三圈 - 直行冲向终点 A 点 (直道 ~0°)
         case 27:
             base_speed = 30;
             target_angle = 180.0f;
 
-            if (count >= 4 || YawTrack_IsCurveDone(180.0f))
+            if (count >= 4 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
                 base_speed = 0;
                 current_state = 28;
@@ -615,9 +624,9 @@ static void Run_Task_5(void)
         }
     }
 
-    // 弯道段兜底：累计角度 > 200° 时强制推进
+    // 弯道段兜底：半圆弧 ~90° → 阈值 110° (P1#5: 按实际角度校准)
     // 加去抖窗口，防止 ISR 中 count++ 与此处竞争导致跳过路段
-    if ((count == 1 || count == 3) && YawTrack_IsCurveDone(200.0f)) {
+    if ((count == 1 || count == 3) && YawTrack_IsCurveDone(YAW_THRESH_HALF_ARC)) {
         count++;
         count_debounce = DEBOUNCE_INIT;
     }
