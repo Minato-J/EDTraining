@@ -109,6 +109,7 @@ void Task_Key_Scan(void)
             count = 0;
             count_debounce = 0;
             lap_count = 0;
+            rotating = 0;
             angle_initialized = 0;   // P0#2: 角度过滤器哨兵归零，首帧无条件建立基线
             ControlState_Reset();    // P1+P2: 清零blind_ticks + turn_out_smooth + PID
             YawTrack_Reset(current_angle);
@@ -235,22 +236,34 @@ static void Run_Task_3(void)
     switch (count)
     {
         case 0:
-            // ---------------- A→C 对角线段 ----------------
-            target_angle = DIAG_AC_ANGLE;  // -38°
-            base_speed = SPEED_STRAIGHT;   // 60
+            // ---------------- A→C 对角线段 (起步先转头) ----------------
+            t3_wait_tick++;
+            if (t3_wait_tick <= 15) // 约 300ms 纯原地转头，对准 -38°
+            {
+                target_angle = DIAG_AC_ANGLE;
+                base_speed = 0;
+                rotating = 1;
+            }
+            else
+            {
+                target_angle = DIAG_AC_ANGLE;
+                base_speed = SPEED_STRAIGHT;   // 60，盲开冲刺 A->C
+                rotating = 0;
+            }
             ff_diff = 0;
             break;
 
         case 1:
             // ---------------- C→B 段 (进弯刹车磨合期) ----------------
-            target_angle = 0.0f;
             t3_wait_tick++;
             if (t3_wait_tick <= TICK_IN_BRAKE)
             {
+                target_angle = DIAG_AC_ANGLE;  // 刹车期间保持上一段角度，防原地打转
                 base_speed = SPEED_IN_BRAKE;   // 进弯重刹
             }
             else
             {
+                target_angle = 0.0f;           // 刹车结束后切入新弯道
                 base_speed = SPEED_CURVE_RUN;  // 正常循迹过弯
             }
             ff_diff = 0;
@@ -258,14 +271,15 @@ static void Run_Task_3(void)
 
         case 2:
             // ---------------- B→D 段 (进弯刹车) ----------------
-            target_angle = DIAG_BD_ANGLE;  // -144°
             t3_wait_tick++;
             if (t3_wait_tick <= TICK_IN_BRAKE)
             {
+                target_angle = 0.0f;           // 刹车期间保持上一段角度 (C->B是0度)
                 base_speed = SPEED_IN_BRAKE;
             }
             else
             {
+                target_angle = DIAG_BD_ANGLE;  // -144°
                 base_speed = SPEED_CURVE_RUN;
             }
             ff_diff = 0;
@@ -273,14 +287,15 @@ static void Run_Task_3(void)
 
         case 3:
             // ---------------- D→A 段 (进弯刹车) ----------------
-            target_angle = 180.0f;
             t3_wait_tick++;
             if (t3_wait_tick <= TICK_IN_BRAKE)
             {
+                target_angle = DIAG_BD_ANGLE;  // 刹车期间保持上一段角度 (-144度)
                 base_speed = SPEED_IN_BRAKE;
             }
             else
             {
+                target_angle = 180.0f;         // D->A 是 180度
                 base_speed = SPEED_CURVE_RUN;
             }
             ff_diff = 0;
@@ -295,6 +310,7 @@ static void Run_Task_3(void)
             t3_wait_tick = 0;
             t3_last_count = -1;
             ff_diff = 0;
+            rotating = 0;
             break;
     }
 }
