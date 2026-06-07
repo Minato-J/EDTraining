@@ -396,6 +396,7 @@ static void Run_Task_4(void)
         case 11:
             Car_SetTargetAngle(-34.0f);  // Issue 06e
             Car_SetSpeed(60);  // Issue 06e
+            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
 
             if (count >= 1 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
@@ -417,6 +418,7 @@ static void Run_Task_4(void)
         case 13:
             Car_SetSpeed(30);  // Issue 06e
             Car_SetTargetAngle(0.0f);  // Issue 06e
+            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
 
             if (count >= 2 || YawTrack_IsCurveDone(YAW_THRESH_SMALL_ARC))
             {
@@ -438,6 +440,7 @@ static void Run_Task_4(void)
         case 15:
             Car_SetSpeed(60);  // Issue 06e
             Car_SetTargetAngle(-148.0f);  // Issue 06e
+            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
 
             if (count >= 3 || YawTrack_IsCurveDone(YAW_THRESH_DIAG))
             {
@@ -459,6 +462,7 @@ static void Run_Task_4(void)
         case 17:
             Car_SetSpeed(30);  // Issue 06e
             Car_SetTargetAngle(180.0f);  // Issue 06e
+            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
 
             if (count >= 4 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
@@ -487,6 +491,7 @@ static void Run_Task_4(void)
         case 21:
             Car_SetTargetAngle(-37.0f);  // Issue 06e
             Car_SetSpeed(60);  // Issue 06e
+            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
 
             if (count >= 1 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
@@ -508,6 +513,7 @@ static void Run_Task_4(void)
         case 23:
             Car_SetSpeed(30);  // Issue 06e
             Car_SetTargetAngle(0.0f);  // Issue 06e
+            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
 
             if (count >= 2 || YawTrack_IsCurveDone(YAW_THRESH_SMALL_ARC))
             {
@@ -530,6 +536,7 @@ static void Run_Task_4(void)
         case 25:
             Car_SetSpeed(60);  // Issue 06e
             Car_SetTargetAngle(-147.0f);  // Issue 06e
+            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
 
             if (count >= 3 || YawTrack_IsCurveDone(YAW_THRESH_DIAG))
             {
@@ -551,6 +558,7 @@ static void Run_Task_4(void)
         case 27:
             Car_SetSpeed(30);  // Issue 06e
             Car_SetTargetAngle(180.0f);  // Issue 06e
+            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
 
             if (count >= 4 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
