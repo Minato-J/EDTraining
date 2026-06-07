@@ -301,6 +301,7 @@ void SystemClock_Config(void)
 // P2#8: PID 状态重置 → 积分/上次误差/输出归零
 void ControlState_Reset(void) {
     Car_ResetState();     // Issue 06: 清零 blind_ticks + turn_out_smooth（已移入 car_control）
+    // Issue 08c: 主循环消费块 fil_l/fil_r 是 static，Start 后自然重建
     PID_Init(&pid_left, 0.9f, 0.12f, 0.0f, 500.0f);
     PID_Init(&pid_right, 0.8f, 0.12f, 0.0f, 500.0f);
     PID_Init(&pid_angle, 1.2f, 0.0f, 0.6f, 40.0f);
@@ -376,43 +377,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         isr_snapshot_in.line_sensor_data = line_sensor_data;
         isr_snapshot_in.k230_data_valid  = k230_data_valid;
         isr_control_ready = 1;
-
-        // ================= 2. 核心大脑：Car_ControlLoop 统一调度 (Issue 06) =================
-        // 替换原 ~50 行双模切换 (rotating/blind/line) + turn_out 平滑 + 差速合成
-        Car_SensorInputs in = {current_angle, line_sensor_data, k230_data_valid};
-        Car_ControlOutputs out = Car_ControlLoop(in);
-
-        target_v_left  = out.target_v_left;
-        target_v_right = out.target_v_right;
-        if (out.emergency_stop) task_running = 0;
-        // ================= 3. 底层肌肉：速度环 PID =================
-        // === 左轮 ===
-        int16_t raw_l = Encoder_Get_Count_Left();
-        static float fil_l = 0; 
-        fil_l = 0.7f * fil_l + 0.3f * (float)raw_l; 
-#ifdef PID_USE_VELOCITY_FORM
-		float out_l = PID_Velocity_Compute(&pid_vel_left, target_v_left, (int)fil_l);
-#else
-        float out_l = PID_Compute(&pid_left, (float)target_v_left, fil_l);
-#endif
-        Motor_SetSpeed_A((int16_t)out_l);
-        current_v_left = (int16_t)fil_l;
-
-        // === 右轮 ===
-        int16_t raw_r = Encoder_Get_Count_Right();
-        static float fil_r = 0; 
-        fil_r = 0.7f * fil_r + 0.3f * (float)raw_r; 
-#ifdef PID_USE_VELOCITY_FORM
-		float out_r = PID_Velocity_Compute(&pid_vel_right, target_v_right, (int)fil_r);
-#else
-        float out_r = PID_Compute(&pid_right, (float)target_v_right, fil_r);
-#endif
-        Motor_SetSpeed_B((int16_t)out_r);
-        current_v_right = (int16_t)fil_r;
-#ifdef DEBUG_UART
-			debug_tick_cnt++;                 // Issue 04: 调试计数
-#endif
-		//printf("%d,%d\r\n",raw_l,raw_r);
     }
 }
 
