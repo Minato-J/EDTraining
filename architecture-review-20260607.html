@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — H0 Electronic Design Training</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; stroke-width: 2px; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <!-- Header -->
+      <header class="space-y-4">
+        <h1 class="text-3xl font-serif font-bold tracking-tight">H0 架构评审</h1>
+        <p class="text-slate-500 text-sm">H0 Electronic Design Training · 2026-06-07</p>
+        <div class="flex flex-wrap gap-3 text-xs">
+          <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-white border border-slate-200">
+            <span class="w-3 h-3 border-2 border-slate-600 inline-block"></span> module
+          </span>
+          <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-white border border-slate-200">
+            <span class="w-3 h-3 inline-block border border-dashed border-slate-500"></span> seam
+          </span>
+          <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-white border border-red-200">
+            <span class="text-red-600">→</span> leakage (extern 跨模块读写)
+          </span>
+          <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-900 text-white">
+            deep module
+          </span>
+        </div>
+      </header>
+
+      <!-- Candidate cards -->
+      <section id="candidates" class="space-y-10">
+
+        <!-- Candidate 1 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-serif font-bold">1. 蜘蛛网全局状态 —— car_control 依赖反转</h2>
+              <p class="text-slate-500 text-sm mt-1">15+ 跨模块 extern 引用，5 个模块直接读取其他模块的全局变量</p>
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">in-process</span>
+            </div>
+          </div>
+
+          <div class="font-mono text-sm text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+            <span>car_control.c</span><span>main.c</span><span>task.c</span><span>k230_track.c</span><span>wit_imu.c</span>
+          </div>
+
+          <!-- Before / After -->
+          <div class="grid grid-cols-2 gap-6">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — extern 直读全局变量</p>
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <pre class="mermaid">
+graph TD
+  subgraph main.c
+    CA[current_angle]
+    PA[pid_angle]
+    VL[target_v_left]
+    VR[target_v_right]
+  end
+  subgraph k230_track.c
+    LS[line_sensor_data]
+    KV[k230_data_valid]
+  end
+  subgraph task.c
+    TR[task_running]
+  end
+  subgraph car_control.c
+    CL[Car_ControlLoop]
+  end
+  CL -.leak.-> CA
+  CL -.leak.-> PA
+  CL -.leak.-> VL
+  CL -.leak.-> VR
+  CL -.leak.-> LS
+  CL -.leak.-> KV
+  CL -.leak.-> TR
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class CL,CA,PA,VL,VR,LS,KV,TR leak
+                </pre>
+                <p class="text-xs text-red-600 mt-2">5 个 extern，7 条跨模块泄漏</p>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — 参数化注入</p>
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <pre class="mermaid">
+graph TD
+  subgraph main.c [main.c TIM6 ISR]
+    CA2[current_angle]
+    LS2[line_sensor_data]
+    KV2[k230_data_valid]
+  end
+  subgraph car_control.c
+    CL2[Car_ControlLoop]
+    IN[/sensor_inputs angle_data/]
+    OUT[\target_v_left target_v_right\]
+  end
+  CA2 -->|参数| IN
+  LS2 -->|参数| IN
+  KV2 -->|参数| IN
+  IN --> CL2
+  CL2 --> OUT
+  style car_control.c fill:#0f172a,color:#fff
+  style IN fill:#1e293b,color:#fff,stroke-dasharray:4 4
+  style OUT fill:#1e293b,color:#fff,stroke-dasharray:4 4
+                </pre>
+                <p class="text-xs text-emerald-600 mt-2">零 extern · 可独立测试 · 接口清晰</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <p class="font-medium text-slate-700">Problem</p>
+              <p class="text-slate-500">car_control.c 通过 extern 直接读取 5 个外部模块的全局变量，每个 extern 都是一条跨模块泄漏路径，无法独立测试。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Solution</p>
+              <p class="text-slate-500">将 Car_ControlLoop 签名改为接收 struct 参数（sensor inputs），返回 struct 输出（target speeds）。main.c ISR 负责组装输入、分发输出。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Wins</p>
+              <ul class="list-disc list-inside text-slate-500 space-y-0.5">
+                <li>locality: 控制逻辑集中一个模块</li>
+                <li>leverage: 一个 struct 入参，一对速度出参</li>
+                <li>接口缩小 80%：5 extern → 1 参数结构体</li>
+                <li>car_control 可在 PC 上单测</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 2 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-serif font-bold">2. count 双写竞争 —— 事件队列替代共享计数器</h2>
+              <p class="text-slate-500 text-sm mt-1">ISR 和 task 状态机同时写 count，__disable_irq 保护是脆弱信号</p>
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">in-process</span>
+            </div>
+          </div>
+
+          <div class="font-mono text-sm text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+            <span>main.c (TIM6 ISR)</span><span>task.c (5 tasks)</span><span>yaw_track.c</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — 双写竞争</p>
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <pre class="mermaid">
+graph TD
+  ISR[TIM6 ISR 丢线边沿检测]
+  TASK[task 状态机 YawTrack 弯道完成]
+  CNT[count 变量]
+  DB[count_debounce]
+  ISR -->|++ 无锁| CNT
+  TASK -->|++ __disable_irq| CNT
+  ISR -->|写| DB
+  TASK -->|写| DB
+  CNT -->|读| SM[Task 状态机 switch/case]
+  style CNT fill:#fef2f2,stroke:#dc2626,stroke-width:2px
+  style DB fill:#fef2f2,stroke:#dc2626
+                </pre>
+                <p class="text-xs text-red-600 mt-2">两个不同事件源驱动同一计数器，语义混乱</p>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — 事件队列</p>
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <pre class="mermaid">
+graph TD
+  ISR2[TIM6 ISR]
+  TASK2[task 状态机]
+  EQ[(事件队列 FIFO)]
+  SEQ[SegmentSequencer]
+  SM2[Task 状态机 switch]
+  ISR2 -->|push LINE_LOST| EQ
+  TASK2 -->|push CURVE_DONE| EQ
+  EQ --> SEQ
+  SEQ -->|advance_segment| SM2
+  style EQ fill:#0f172a,color:#fff
+  style SEQ fill:#0f172a,color:#fff
+                </pre>
+                <p class="text-xs text-emerald-600 mt-2">单一写入者 · 事件语义明确 · 无需关中断</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <p class="font-medium text-slate-700">Problem</p>
+              <p class="text-slate-500">count 被 ISR（丢线边沿）和 task 状态机（YawTrack 弯道完成）两个异构事件源同时写入，__disable_irq() 是代码中的"危险信号"。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Solution</p>
+              <p class="text-slate-500">引入 SegmentSequencer 模块：ISR emit LINE_LOST 事件，task emit CURVE_DONE 事件，Sequencer 消费事件并推进段编号。count 退化为只读推导值。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Wins</p>
+              <ul class="list-disc list-inside text-slate-500 space-y-0.5">
+                <li>locality: 段推进逻辑集中一处</li>
+                <li>删除 __disable_irq / __enable_irq 对</li>
+                <li>事件语义自文档化</li>
+                <li>count_debounce 与 Sequencer 合并</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 3 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-serif font-bold">3. angle_normalize 重复 —— 提取共享工具模块</h2>
+              <p class="text-slate-500 text-sm mt-1">同一逻辑两份实现：car_control.c:41 和 yaw_track.c:111</p>
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">in-process</span>
+            </div>
+          </div>
+
+          <div class="font-mono text-sm text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+            <span>car_control.c:41-45</span><span>yaw_track.c:111-112</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — 两份重复实现</p>
+              <div class="flex gap-3">
+                <div class="flex-1 border border-red-200 bg-red-50 rounded p-3 text-xs font-mono">
+                  <span class="text-red-500">car_control.c</span>
+                  <pre class="mt-1 text-slate-700">while (diff >  180) diff-=360;
+while (diff < -180) diff+=360;</pre>
+                </div>
+                <div class="flex-1 border border-red-200 bg-red-50 rounded p-3 text-xs font-mono">
+                  <span class="text-red-500">yaw_track.c</span>
+                  <pre class="mt-1 text-slate-700">while (delta >  180) delta-=360;
+while (delta < -180) delta+=360;</pre>
+                </div>
+              </div>
+              <p class="text-xs text-red-600 mt-2">修一处忘另一处 → bug</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — 共享模块</p>
+              <div class="border-2 border-emerald-400 bg-emerald-50 rounded p-4">
+                <div class="deep rounded p-3 text-xs font-mono text-emerald-200">
+                  <span class="text-white font-bold">angle_utils.h</span>
+                  <pre class="mt-1">float Angle_Normalize(float diff);</pre>
+                </div>
+                <div class="flex gap-2 mt-2 text-xs text-emerald-700">
+                  <span class="bg-white rounded px-2 py-0.5">car_control.c 调用</span>
+                  <span class="bg-white rounded px-2 py-0.5">yaw_track.c 调用</span>
+                </div>
+              </div>
+              <p class="text-xs text-emerald-600 mt-2">一处修改，所有调用者受益</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <p class="font-medium text-slate-700">Problem</p>
+              <p class="text-slate-500">±180° 归一化逻辑在 car_control.c（static）和 yaw_track.c（内联）各实现一次。修改必须同步两处，否则漂移。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Solution</p>
+              <p class="text-slate-500">新建 angle_utils.c/h，导出 Angle_Normalize(float) → float。car_control 和 yaw_track 均改为调用此函数。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Wins</p>
+              <ul class="list-disc list-inside text-slate-500 space-y-0.5">
+                <li>DRY: 1 份实现，2 个调用者</li>
+                <li>leverage: 归一化算法一处维护</li>
+                <li>零依赖（纯计算，仅需 math.h float）</li>
+                <li>可独立单元测试</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 4 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-serif font-bold">4. car_control 两层 API 约定脆弱 —— 合并模式入口与微调</h2>
+              <p class="text-slate-500 text-sm mt-1">Car_StartLine（重置 filter）vs Car_SetSpeed/SetTargetAngle（不重置）— 纯约定，无强制</p>
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">in-process</span>
+            </div>
+          </div>
+
+          <div class="font-mono text-sm text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+            <span>car_control.c (全部 9 个公开函数)</span><span>task.c (5 个 Run_Task 调用者)</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — 两层 API，约定驱动</p>
+              <div class="rounded-lg border border-slate-200 bg-white p-4 text-xs font-mono space-y-1">
+                <div class="bg-amber-50 border border-amber-200 rounded px-2 py-1">Car_StartLine(θ, v, ff)  ← 重置 turn_out_smooth</div>
+                <div class="bg-slate-100 rounded px-2 py-1">Car_SetSpeed(v)           ← 不重置</div>
+                <div class="bg-slate-100 rounded px-2 py-1">Car_SetTargetAngle(θ)      ← 不重置</div>
+                <div class="bg-slate-100 rounded px-2 py-1">Car_SetFFDiff(ff)          ← 不重置</div>
+                <div class="mt-1 text-red-500">❌ 调用 Car_SetSpeed 误代 Car_StartLine = filter 崩塌</div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — 统一入口 + 不可变段配置</p>
+              <div class="rounded-lg border-2 border-emerald-400 bg-white p-4 text-xs font-mono space-y-1">
+                <div class="bg-emerald-50 rounded px-2 py-1">
+                  <span class="font-bold">Car_EnterSegment(SegmentConfig cfg)</span>
+                </div>
+                <div class="text-slate-500 pl-2">SegmentConfig = {angle, speed, ff_diff, mode}</div>
+                <div class="mt-1 text-emerald-600">✓ 一次调用设置全部参数</div>
+                <div class="text-emerald-600">✓ 段内不可变 → 无需微调 API</div>
+                <div class="text-emerald-600">✓ filter 行为由 mode 决定，不依赖调用者记得</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <p class="font-medium text-slate-700">Problem</p>
+              <p class="text-slate-500">car_control 暴露 6 个写 API（StartLine/StartStraight/TurnTo + SetSpeed/SetTargetAngle/SetFFDiff），两级调用约定靠注释传递，无编译期约束。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Solution</p>
+              <p class="text-slate-500">合并为 Car_EnterSegment(SegmentConfig)，结构体包含 {mode, angle, speed, ff_diff}。段内无需微调的场景（Task1/2/5）一行搞定。Task3 刹车策略用单独接口。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Wins</p>
+              <ul class="list-disc list-inside text-slate-500 space-y-0.5">
+                <li>接口缩小: 9→4 公开函数</li>
+                <li>不可能"忘调 Car_StartLine"</li>
+                <li>leverage: 一个 struct 表达完整段意图</li>
+                <li>调用约 30 行样板代码消失</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 5 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-serif font-bold">5. Task 4 的 29 状态三圈重复 —— 参数化循环替代复制粘贴</h2>
+              <p class="text-slate-500 text-sm mt-1">3 圈 × 7 段 = 21+ 个几乎相同的 case，仅有 angle 微调 ±2°</p>
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">in-process</span>
+            </div>
+          </div>
+
+          <div class="font-mono text-sm text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+            <span>task.c Run_Task_4 (case 0–28, ~290 行)</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — 29 状态手写展开</p>
+              <div class="overflow-hidden rounded-lg border border-slate-200">
+                <!-- Cross-section: 3 layers of identical blocks -->
+                <div class="border-l-4 border-red-300 bg-red-50 px-3 py-1.5 text-xs">
+                  <span class="font-mono text-red-600">case 0–7:</span> 第一圈 &nbsp; angle=-38/0/-146/180
+                </div>
+                <div class="border-l-4 border-orange-300 bg-orange-50 px-3 py-1.5 text-xs">
+                  <span class="font-mono text-orange-600">case 10–17:</span> 第二圈 &nbsp; angle=-34/0/-148/180
+                </div>
+                <div class="border-l-4 border-amber-300 bg-amber-50 px-3 py-1.5 text-xs">
+                  <span class="font-mono text-amber-600">case 20–28:</span> 第三圈 &nbsp; angle=-37/0/-146/180
+                </div>
+                <div class="px-3 py-2 text-xs text-red-500">每圈 7 个状态，仅有 target_angle 微调 2°~4°</div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — 参数化循环 × 圈数</p>
+              <div class="border-2 border-emerald-400 bg-emerald-50 rounded p-4 text-xs font-mono">
+                <pre class="text-slate-700">const float lap_angles[3][4] = {
+  {-38,   0, -146, 180},  // lap 1
+  {-34,   0, -148, 180},  // lap 2
+  {-37,   0, -146, 180},  // lap 3
+};
+current_state = (lap * 7) + segment;</pre>
+                <div class="mt-2 text-emerald-600">290 行 → ~40 行</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <p class="font-medium text-slate-700">Problem</p>
+              <p class="text-slate-500">Run_Task_4 展开 29 个状态（3 圈 × 7 段 + 停车），每圈仅有 target_angle 微调 2°，修改一个段需要同步 3 处。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Solution</p>
+              <p class="text-slate-500">用 lap_angles[3][4] 查找表 + 周界状态机 = lap*7+segment 计算 current_state。段推进逻辑提取为函数，复用于每圈。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Wins</p>
+              <ul class="list-disc list-inside text-slate-500 space-y-0.5">
+                <li>locality: arena 参数集中一个数组</li>
+                <li>290 行 → ~40 行 (86% 缩减)</li>
+                <li>改角度只需改数组一个元素</li>
+                <li>增加圈数不增加代码行</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 6 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-serif font-bold">6. 传感器数据流纠缠 I/O —— K230/WIT 接口收紧</h2>
+              <p class="text-slate-500 text-sm mt-1">纯计算函数与 ISR 专用函数混在同一模块，测试只能通过硬件</p>
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">Speculative</span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">in-process / local-sub</span>
+            </div>
+          </div>
+
+          <div class="font-mono text-sm text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+            <span>k230_track.c</span><span>wit_imu.c</span><span>main.c ISR</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — 纯计算 + ISR 入口混在同一模块</p>
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <pre class="mermaid">
+graph TD
+  subgraph k230_track.c
+    PB[K230_Parse_Byte<br/>ISR 专用]
+    GT[K230_Get_Turn_Speed<br/>纯计算 but static last_turn]
+    TT[K230_Timeout_Tick<br/>ISR 专用]
+  end
+  subgraph wit_imu.c
+    WP[WIT_Parse_Byte<br/>ISR 专用]
+  end
+  PB --> LS[line_sensor_data global]
+  WP --> IMU[IMU_Data global]
+  GT --> LS
+  style PB fill:#fef2f2
+  style WP fill:#fef2f2
+                </pre>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — 纯函数提取，ISR 入口保留</p>
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <pre class="mermaid">
+graph TD
+  subgraph k230_parser.c [k230_parser.c]
+    PB2[K230_Parse_Byte<br/>ISR 专用]
+    TT2[K230_Timeout_Tick<br/>ISR 专用]
+  end
+  subgraph k230_math.c [k230_math.c — 纯函数]
+    GT2[K230_Compute_Turn<br/>无状态, 纯计算]
+  end
+  PB2 --> LS2[line_sensor_data]
+  GT2 -->|输入 sensor_val| OUT2[输出 turn_speed]
+  style k230_math.c fill:#0f172a,color:#fff
+                </pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <p class="font-medium text-slate-700">Problem</p>
+              <p class="text-slate-500">K230_Get_Turn_Speed 是纯计算但持有 static last_turn（隐式状态），且与 ISR 专用函数同文件。无法脱离硬件单测。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Solution</p>
+              <p class="text-slate-500">拆分 k230_math.c（纯计算，无状态，last_turn 外提），wit_imu 帧解析器保持不变但收紧接口。传感器数据通过参数传递，不通过全局变量。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Wins</p>
+              <ul class="list-disc list-inside text-slate-500 space-y-0.5">
+                <li>K230 转弯算法可 PC 单测</li>
+                <li>隐式状态 explicit 到调用者</li>
+                <li>接口更小、更明确</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 7 -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-serif font-bold">7. Encoder 读即清零 —— 隐藏契约未文档化</h2>
+              <p class="text-slate-500 text-sm mt-1">调用者必须知道 Encoder_Get_Count 有破坏性副作用，接口未表达</p>
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">Speculative</span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">in-process</span>
+            </div>
+          </div>
+
+          <div class="font-mono text-sm text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+            <span>encoder.c</span><span>main.c ISR</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — 破坏性读取，隐含契约</p>
+              <div class="rounded-lg border border-slate-200 bg-white p-4 text-xs font-mono">
+                <pre class="text-slate-700">int16_t Encoder_Get_Count_Left(void) {
+  cnt = __HAL_TIM_GET_COUNTER(&htim2);
+  <span class="text-red-500">__HAL_TIM_SET_COUNTER(&htim2, 0);</span>  ← 清零！
+  return cnt;
+}</pre>
+                <div class="mt-2 text-red-500 text-xs">读两次 = 第二次返回 0 · 无类型/命名提示</div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — 语义明确的接口</p>
+              <div class="rounded-lg border-2 border-emerald-400 bg-white p-4 text-xs font-mono">
+                <pre class="text-slate-700"><span class="text-emerald-600 font-bold">int16_t Encoder_ReadAndReset(EncoderCh ch);</span>
+// 名字自文档：读 + 清零一步完成</pre>
+                <div class="mt-2 text-xs text-slate-500">或拆为两步：</div>
+                <pre class="text-slate-700">int16_t Encoder_Read(EncoderCh ch);
+void    Encoder_Reset(EncoderCh ch);</pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <p class="font-medium text-slate-700">Problem</p>
+              <p class="text-slate-500">Encoder_Get_Count 读后立刻清零计数器。函数名暗示纯读，实则破坏性操作。调用者若不知此契约则会出错。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Solution</p>
+              <p class="text-slate-500">重命名为 Encoder_ReadAndReset()，语义自文档化。或拆分为 Read + Reset 两步，让调用者显式管理清零时机。</p>
+            </div>
+            <div>
+              <p class="font-medium text-slate-700">Wins</p>
+              <ul class="list-disc list-inside text-slate-500 space-y-0.5">
+                <li>接口名 = 行为契约</li>
+                <li>消除"我不知道会清零"类 bug</li>
+                <li>零运行时开销</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- Top Recommendation -->
+      <section id="top-recommendation" class="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-6 space-y-4">
+        <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500 text-white">Top Recommendation</span>
+        <h2 class="text-xl font-serif font-bold">先做 #1 (car_control 依赖反转)，然后 #3 (angle_normalize 去重)</h2>
+        <div class="grid grid-cols-2 gap-6 text-sm text-slate-700">
+          <div>
+            <p class="font-medium mb-1">为什么 #1 排第一</p>
+            <ul class="list-disc list-inside space-y-1 text-slate-600">
+              <li>回报最大：消除 5 条 extern 泄漏，car_control 即可独立测试</li>
+              <li>门槛低：纯 in-process 重构，不涉及硬件变动</li>
+              <li>先行条件：后续任何 car_control 改动都依赖这个隔离</li>
+              <li>risk 可控：只改 Car_ControlLoop 签名 + main.c ISR 一层胶水</li>
+            </ul>
+          </div>
+          <div>
+            <p class="font-medium mb-1">为什么 #3 紧跟</p>
+            <ul class="list-disc list-inside space-y-1 text-slate-600">
+              <li>5 分钟改完：新建一个 .h + .c，改 2 处调用</li>
+              <li>立竿见影：消除已知代码重复</li>
+              <li>零风险：纯函数提取，行为完全等价</li>
+              <li>为 #1 铺路：car_control 重构时 angle_normalize 已外提</li>
+            </ul>
+          </div>
+        </div>
+        <p class="text-sm text-slate-500">
+          <a href="#candidates" class="text-emerald-700 underline">跳回候选列表 ↑</a>
+        </p>
+      </section>
+
+    </main>
+  </body>
+</html>
