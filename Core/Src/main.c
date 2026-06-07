@@ -328,7 +328,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         skip_angle_update:   // NaN 哨兵跳转点：跳过本帧角度更新但继续执行控制
         // ================= 2. 核心大脑：Car_ControlLoop 统一调度 (Issue 06) =================
         // 替换原 ~50 行双模切换 (rotating/blind/line) + turn_out 平滑 + 差速合成
-        Car_ControlLoop();
+        Car_SensorInputs in = {current_angle, line_sensor_data, k230_data_valid};
+        Car_ControlOutputs out = Car_ControlLoop(in);
+
+        target_v_left  = out.target_v_left;
+        target_v_right = out.target_v_right;
+        if (out.emergency_stop) task_running = 0;
         // ================= 3. 底层肌肉：速度环 PID =================
         // === 左轮 ===
         int16_t raw_l = Encoder_Get_Count_Left();
