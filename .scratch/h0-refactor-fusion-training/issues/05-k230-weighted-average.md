@@ -1,6 +1,7 @@
 # 05 — K230 加权平均法转弯量计算
 
-**Status:** ready-for-agent
+**Status:** done (2026-06-07)
+**Implementation:** 直接替换（非 `#ifdef` 宏切换），查表法注释保留在代码中
 
 ## Parent
 
