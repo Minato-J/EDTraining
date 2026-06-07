@@ -128,14 +128,12 @@ static void Run_Task_1(void)
 {
     if (count == 0)
     {
-        target_angle = 0.0f;
-        base_speed = BASE_SPEED_STRAIGHT;
-        ff_diff = 0;
+        Car_StartLine(0.0f, BASE_SPEED_STRAIGHT, 0);   // Issue 06c
     }
     else if (count == 1)
     {
+        Car_Stop();        // Issue 06c
         task_running = 0;
-        base_speed = 0;
     }
 }
 
@@ -168,38 +166,29 @@ static void Run_Task_2(void)
     {
         case 0:
             // A→B 直线段，保持初始朝向
-            target_angle = 0.0f;
-            base_speed = BASE_SPEED_STRAIGHT;
-            ff_diff = 0;
+            Car_StartLine(0.0f, BASE_SPEED_STRAIGHT, 0);     // Issue 06c
             break;
 
         case 1:
             // B→C 右半圆弧
-            target_angle = RIGHT_HALF_CIRCLE;
-            base_speed = BASE_SPEED_CURVE;
-            ff_diff = 10;
+            Car_StartLine(RIGHT_HALF_CIRCLE, BASE_SPEED_CURVE, 10);  // Issue 06c
             break;
 
         case 2:
             // C→D 直线段，朝向 180°
-            target_angle = 180.0f;
-            base_speed = BASE_SPEED_STRAIGHT;
-            ff_diff = 0;
+            Car_StartLine(180.0f, BASE_SPEED_STRAIGHT, 0);   // Issue 06c
             break;
 
         case 3:
             // D→A 左半圆弧
-            target_angle = LEFT_HALF_CIRCLE;
-            base_speed = BASE_SPEED_CURVE;
-            ff_diff = -10;
+            Car_StartLine(LEFT_HALF_CIRCLE, BASE_SPEED_CURVE, -10);  // Issue 06c
             break;
 
         case 4:
         default:
             // 回到 A，停车
+            Car_Stop();        // Issue 06c
             task_running = 0;
-            base_speed = 0;
-            ff_diff = 0;
             break;
     }
 }
@@ -618,9 +607,8 @@ static void Run_Task_5(void)
         lap_count++;
         if (lap_count >= 4)
         {
+            Car_Stop();        // Issue 06c
             task_running = 0;
-            base_speed = 0;
-            ff_diff = 0;
             lap_count = 0;
             t5_last_count = -1;
             return;
@@ -642,27 +630,19 @@ static void Run_Task_5(void)
 
     if (count == 0)
     {
-        target_angle = DIAG_AC_ANGLE;
-        base_speed = BASE_SPEED_STRAIGHT;
-        ff_diff = 0;
+        Car_StartLine(DIAG_AC_ANGLE, BASE_SPEED_STRAIGHT, 0);        // Issue 06c
     }
     else if (count == 1)
     {
-        target_angle = RIGHT_HALF_CIRCLE;
-        base_speed = BASE_SPEED_CURVE;
-        ff_diff = 10;
+        Car_StartLine(RIGHT_HALF_CIRCLE, BASE_SPEED_CURVE, 10);      // Issue 06c
     }
     else if (count == 2)
     {
-        target_angle = DIAG_BD_ANGLE;
-        base_speed = BASE_SPEED_STRAIGHT;
-        ff_diff = 0;
+        Car_StartLine(DIAG_BD_ANGLE, BASE_SPEED_STRAIGHT, 0);        // Issue 06c
     }
     else if (count == 3)
     {
-        target_angle = LEFT_HALF_CIRCLE;
-        base_speed = BASE_SPEED_CURVE;
-        ff_diff = -10;
+        Car_StartLine(LEFT_HALF_CIRCLE, BASE_SPEED_CURVE, -10);      // Issue 06c
     }
 }
 
