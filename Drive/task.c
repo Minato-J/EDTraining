@@ -278,9 +278,9 @@ static void Run_Task_4(void)
 
         // 状态 0: 第一圈 - A点起步 -> 目标 -38度 (不停车)
         case 0:
-            base_speed = 60;
-            target_angle = -38.0f;
-            ff_diff = 0;
+            Car_SetSpeed(60);  // Issue 06e
+            Car_SetTargetAngle(-38.0f);  // Issue 06e
+            Car_SetFFDiff(0);  // Issue 06e
             count = 0;
             YawTrack_Reset(current_angle);
             current_state = 1;
@@ -288,21 +288,21 @@ static void Run_Task_4(void)
 
         // 状态 1: 第一圈 - 保持对角推进 A→C (~38°) -> 等待触发 C 点
         case 1:
-            target_angle = -38.0f;
-            base_speed = 60;
-            ff_diff = 0;
+            Car_SetTargetAngle(-38.0f);  // Issue 06e
+            Car_SetSpeed(60);  // Issue 06e
+            Car_SetFFDiff(0);  // Issue 06e
 
             if (count >= 1 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
-                base_speed = 0;
+                Car_SetSpeed(0);  // Issue 06e
                 current_state = 2;
             }
             break;
 
         // 状态 2: 第一圈 - C点换方向 -> 目标 0度 (不停车)
         case 2:
-            base_speed = 30;
-            target_angle = 0.0f;
+            Car_SetSpeed(30);  // Issue 06e
+            Car_SetTargetAngle(0.0f);  // Issue 06e
             count = 1;
             YawTrack_Reset(current_angle);
             current_state = 3;
@@ -310,21 +310,21 @@ static void Run_Task_4(void)
 
         // 状态 3: 第一圈 - 保持 0 度推进 C→B (~50°) -> 等待 B 点
         case 3:
-            base_speed = 30;
-            target_angle = 0.0f;
-            ff_diff = 0;
+            Car_SetSpeed(30);  // Issue 06e
+            Car_SetTargetAngle(0.0f);  // Issue 06e
+            Car_SetFFDiff(0);  // Issue 06e
 
             if (count >= 2 || YawTrack_IsCurveDone(YAW_THRESH_SMALL_ARC))
             {
-                base_speed = 0;
+                Car_SetSpeed(0);  // Issue 06e
                 current_state = 4;
             }
             break;
 
         // 状态 4: 第一圈 - B点换方向 -> 目标 -146度 (逐圈微调)
         case 4:
-            base_speed = 60;
-            target_angle = -146.0f;
+            Car_SetSpeed(60);  // Issue 06e
+            Car_SetTargetAngle(-146.0f);  // Issue 06e
             count = 2;
             YawTrack_Reset(current_angle);
             current_state = 5;
@@ -332,21 +332,21 @@ static void Run_Task_4(void)
 
         // 状态 5: 第一圈 - 保持对角返回 B→D (~144°) -> 等待 D 点
         case 5:
-            base_speed = 60;
-            target_angle = -146.0f;
-            ff_diff = 0;
+            Car_SetSpeed(60);  // Issue 06e
+            Car_SetTargetAngle(-146.0f);  // Issue 06e
+            Car_SetFFDiff(0);  // Issue 06e
 
             if (count >= 3 || YawTrack_IsCurveDone(YAW_THRESH_DIAG))
             {
-                base_speed = 0;
+                Car_SetSpeed(0);  // Issue 06e
                 current_state = 6;
             }
             break;
 
         // 状态 6: 第一圈 - D点换方向 -> 目标 180度 (不停车)
         case 6:
-            base_speed = 30;
-            target_angle = 180.0f;
+            Car_SetSpeed(30);  // Issue 06e
+            Car_SetTargetAngle(180.0f);  // Issue 06e
             count = 3;
             YawTrack_Reset(current_angle);
             current_state = 7;
@@ -354,13 +354,13 @@ static void Run_Task_4(void)
 
         // 状态 7: 第一圈 - 直行冲向 A 点 (直道 ~0°) -> 触发后切入第二圈
         case 7:
-            base_speed = 30;
-            target_angle = 180.0f;
-            ff_diff = 0;
+            Car_SetSpeed(30);  // Issue 06e
+            Car_SetTargetAngle(180.0f);  // Issue 06e
+            Car_SetFFDiff(0);  // Issue 06e
 
             if (count >= 4 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))   // 直道: count 为主
             {
-                base_speed = 0;
+                Car_SetSpeed(0);  // Issue 06e
                 count = 0;
                 current_state = 10;
                 wait_tick = 0;
@@ -374,8 +374,8 @@ static void Run_Task_4(void)
 
         // 状态 10: 第二圈 - A点起步 -> 目标 -34度 (逐圈微调)
         case 10:
-            base_speed = 60;
-            target_angle = -34.0f;
+            Car_SetSpeed(60);  // Issue 06e
+            Car_SetTargetAngle(-34.0f);  // Issue 06e
             count = 0;
             YawTrack_Reset(current_angle);
             current_state = 11;
@@ -383,20 +383,20 @@ static void Run_Task_4(void)
 
         // 状态 11: 第二圈 - 保持对角推进 A→C (~34°) -> 等待触发 C 点
         case 11:
-            target_angle = -34.0f;
-            base_speed = 60;
+            Car_SetTargetAngle(-34.0f);  // Issue 06e
+            Car_SetSpeed(60);  // Issue 06e
 
             if (count >= 1 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
-                base_speed = 0;
+                Car_SetSpeed(0);  // Issue 06e
                 current_state = 12;
             }
             break;
 
         // 状态 12: 第二圈 - C点换方向 -> 目标 0度 (不停车)
         case 12:
-            base_speed = 30;
-            target_angle = 0.0f;
+            Car_SetSpeed(30);  // Issue 06e
+            Car_SetTargetAngle(0.0f);  // Issue 06e
             count = 1;
             YawTrack_Reset(current_angle);
             current_state = 13;
@@ -404,20 +404,20 @@ static void Run_Task_4(void)
 
         // 状态 13: 第二圈 - 保持 0 度推进 C→B (~50°) -> 等待 B 点
         case 13:
-            base_speed = 30;
-            target_angle = 0.0f;
+            Car_SetSpeed(30);  // Issue 06e
+            Car_SetTargetAngle(0.0f);  // Issue 06e
 
             if (count >= 2 || YawTrack_IsCurveDone(YAW_THRESH_SMALL_ARC))
             {
-                base_speed = 0;
+                Car_SetSpeed(0);  // Issue 06e
                 current_state = 14;
             }
             break;
 
         // 状态 14: 第二圈 - B点换方向 -> 目标 -148度 (逐圈微调)
         case 14:
-            base_speed = 60;
-            target_angle = -148.0f;
+            Car_SetSpeed(60);  // Issue 06e
+            Car_SetTargetAngle(-148.0f);  // Issue 06e
             count = 2;
             YawTrack_Reset(current_angle);
             current_state = 15;
@@ -425,20 +425,20 @@ static void Run_Task_4(void)
 
         // 状态 15: 第二圈 - 保持对角返回 B→D (~148°) -> 等待 D 点
         case 15:
-            base_speed = 60;
-            target_angle = -148.0f;
+            Car_SetSpeed(60);  // Issue 06e
+            Car_SetTargetAngle(-148.0f);  // Issue 06e
 
             if (count >= 3 || YawTrack_IsCurveDone(YAW_THRESH_DIAG))
             {
-                base_speed = 0;
+                Car_SetSpeed(0);  // Issue 06e
                 current_state = 16;
             }
             break;
 
         // 状态 16: 第二圈 - D点换方向 -> 目标 180度 (不停车)
         case 16:
-            base_speed = 30;
-            target_angle = 180.0f;
+            Car_SetSpeed(30);  // Issue 06e
+            Car_SetTargetAngle(180.0f);  // Issue 06e
             count = 3;
             YawTrack_Reset(current_angle);
             current_state = 17;
@@ -446,12 +446,12 @@ static void Run_Task_4(void)
 
         // 状态 17: 第二圈 - 直行冲向 A 点 (直道 ~0°) -> 触发后切入最后一圈
         case 17:
-            base_speed = 30;
-            target_angle = 180.0f;
+            Car_SetSpeed(30);  // Issue 06e
+            Car_SetTargetAngle(180.0f);  // Issue 06e
 
             if (count >= 4 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
-                base_speed = 0;
+                Car_SetSpeed(0);  // Issue 06e
                 count = 0;
                 current_state = 20;
                 wait_tick = 0;
@@ -465,8 +465,8 @@ static void Run_Task_4(void)
 
         // 状态 20: 第三圈 - A点起步 -> 目标 -37度 (逐圈微调)
         case 20:
-            base_speed = 60;
-            target_angle = -37.0f;
+            Car_SetSpeed(60);  // Issue 06e
+            Car_SetTargetAngle(-37.0f);  // Issue 06e
             count = 0;
             YawTrack_Reset(current_angle);
             current_state = 21;
@@ -474,20 +474,20 @@ static void Run_Task_4(void)
 
         // 状态 21: 第三圈 - 保持对角推进 A→C (~37°) -> 等待触发 C 点
         case 21:
-            target_angle = -37.0f;
-            base_speed = 60;
+            Car_SetTargetAngle(-37.0f);  // Issue 06e
+            Car_SetSpeed(60);  // Issue 06e
 
             if (count >= 1 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
-                base_speed = 0;
+                Car_SetSpeed(0);  // Issue 06e
                 current_state = 22;
             }
             break;
 
         // 状态 22: 第三圈 - C点换方向 -> 目标 0度 (不停车)
         case 22:
-            base_speed = 30;
-            target_angle = 0.0f;
+            Car_SetSpeed(30);  // Issue 06e
+            Car_SetTargetAngle(0.0f);  // Issue 06e
             count = 1;
             YawTrack_Reset(current_angle);
             current_state = 23;
@@ -495,20 +495,20 @@ static void Run_Task_4(void)
 
         // 状态 23: 第三圈 - 保持 0 度推进 C→B (~50°) -> 等待 B 点
         case 23:
-            base_speed = 30;
-            target_angle = 0.0f;
+            Car_SetSpeed(30);  // Issue 06e
+            Car_SetTargetAngle(0.0f);  // Issue 06e
 
             if (count >= 2 || YawTrack_IsCurveDone(YAW_THRESH_SMALL_ARC))
             {
-                base_speed = 0;
+                Car_SetSpeed(0);  // Issue 06e
                 current_state = 24;
             }
             break;
 
         // 状态 24: 第三圈 - B点换方向 -> 目标 -146度 (逐圈微调)
         case 24:
-            base_speed = 60;
-            target_angle = -146.0f;
+            Car_SetSpeed(60);  // Issue 06e
+            Car_SetTargetAngle(-146.0f);  // Issue 06e
             count = 2;
             YawTrack_Reset(current_angle);
             current_state = 25;
@@ -517,20 +517,20 @@ static void Run_Task_4(void)
         // 状态 25: 第三圈 - 保持对角返回 B→D (~147°) -> 等待 D 点
         //          (最后一圈 angle 微调为 -147°)
         case 25:
-            base_speed = 60;
-            target_angle = -147.0f;
+            Car_SetSpeed(60);  // Issue 06e
+            Car_SetTargetAngle(-147.0f);  // Issue 06e
 
             if (count >= 3 || YawTrack_IsCurveDone(YAW_THRESH_DIAG))
             {
-                base_speed = 0;
+                Car_SetSpeed(0);  // Issue 06e
                 current_state = 26;
             }
             break;
 
         // 状态 26: 第三圈 - D点换方向 -> 目标 180度 (不停车)
         case 26:
-            base_speed = 30;
-            target_angle = 180.0f;
+            Car_SetSpeed(30);  // Issue 06e
+            Car_SetTargetAngle(180.0f);  // Issue 06e
             count = 3;
             YawTrack_Reset(current_angle);
             current_state = 27;
@@ -538,12 +538,12 @@ static void Run_Task_4(void)
 
         // 状态 27: 第三圈 - 直行冲向终点 A 点 (直道 ~0°)
         case 27:
-            base_speed = 30;
-            target_angle = 180.0f;
+            Car_SetSpeed(30);  // Issue 06e
+            Car_SetTargetAngle(180.0f);  // Issue 06e
 
             if (count >= 4 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
-                base_speed = 0;
+                Car_SetSpeed(0);  // Issue 06e
                 current_state = 28;
             }
             break;
@@ -551,7 +551,7 @@ static void Run_Task_4(void)
         // 状态 28: 终点安全停车
         case 28:
         default:
-            base_speed = 0;
+            Car_Stop();        // Issue 06e: 切 CTRL_PARK + 清零累加器
             task_running = 0;
             current_state = 0;
             count = 0;
