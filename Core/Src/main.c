@@ -183,8 +183,44 @@ int main(void)
       Task_Key_Scan();
       // 2. 任务分发，跑对应的状态机 (实现在 task.c 中)
       Task_Dispatcher();
-	  //
-	  OLED_ShowSignedNum(48, 0,selected_task, 4, 16, 1);
+
+      // Issue 08b: 消费 ISR 快照 — Car_ControlLoop + 双轮速度环 PID
+      if (isr_control_ready) {
+          Car_ControlOutputs out = Car_ControlLoop(isr_snapshot_in);
+          target_v_left  = out.target_v_left;
+          target_v_right = out.target_v_right;
+          if (out.emergency_stop) task_running = 0;
+
+          // 左轮速度环
+          static float fil_l = 0;
+          fil_l = 0.7f * fil_l + 0.3f * (float)isr_snapshot_raw_l;
+#ifdef PID_USE_VELOCITY_FORM
+          float out_l = PID_Velocity_Compute(&pid_vel_left, target_v_left, (int)fil_l);
+#else
+          float out_l = PID_Compute(&pid_left, (float)target_v_left, fil_l);
+#endif
+          Motor_SetSpeed_A((int16_t)out_l);
+          current_v_left = (int16_t)fil_l;
+
+          // 右轮速度环
+          static float fil_r = 0;
+          fil_r = 0.7f * fil_r + 0.3f * (float)isr_snapshot_raw_r;
+#ifdef PID_USE_VELOCITY_FORM
+          float out_r = PID_Velocity_Compute(&pid_vel_right, target_v_right, (int)fil_r);
+#else
+          float out_r = PID_Compute(&pid_right, (float)target_v_right, fil_r);
+#endif
+          Motor_SetSpeed_B((int16_t)out_r);
+          current_v_right = (int16_t)fil_r;
+
+#ifdef DEBUG_UART
+          debug_tick_cnt++;                 // Issue 04: 调试计数（从 ISR 移到此处）
+#endif
+          isr_control_ready = 0;
+      }
+
+      //
+      OLED_ShowSignedNum(48, 0,selected_task, 4, 16, 1);
 	  OLED_ShowSignedNum(80, 16, task_running, 4, 16, 1);
 	  OLED_ShowSignedNum(48, 32, count, 4, 16, 1);
 	  OLED_Refresh();
