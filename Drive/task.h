@@ -12,8 +12,6 @@ extern volatile uint16_t count;             // volatile: ISR 与主循环双重�
 extern uint8_t lap_count;
 extern float current_angle;
 extern volatile uint8_t count_debounce;    // volatile: ISR 与主循环同时写入去抖窗口
-extern int16_t ff_diff;          // H0: 前馈差速
-extern uint8_t rotating;         // 旋转阶段标志 (1=正在原地旋转, 屏蔽K230)
 
 // 核心函数
 void Task_Manager_Init(void); // 任务管理器初始化

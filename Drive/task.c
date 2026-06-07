@@ -30,10 +30,8 @@
 #include "math.h"
 #include "yaw_track.h"
 #include "reach_point.h"   // Issue 03
-#include "car_control.h"  // Issue 06: 显式控制模式
+#include "car_control.h"  // Issue 06: 显式控制模式（提供 target_angle/base_speed/ff_diff 声明）
 
-extern float target_angle;
-extern int16_t base_speed;
 extern float Yaw_Offset;
 extern float current_angle;
 extern uint8_t angle_initialized;    // main.c 中角度过滤器哨兵 (P0#2 fix)
@@ -66,11 +64,9 @@ extern uint8_t angle_initialized;    // main.c 中角度过滤器哨兵 (P0#2 fi
 #define DEBOUNCE_INIT 10 // 去抖窗口 10 * 20ms = 200ms
 volatile uint8_t count_debounce = 0;     // volatile: ISR 与主循环同时写入
 
-// ---- 前馈差速 (H0 基础设施) ----
-int16_t ff_diff = 0;
+// ---- 前馈差速 (H0 基础设施, 已移至 car_control.c Issue 06) ----
 
 uint8_t lap_count = 0;
-uint8_t rotating = 0;              // 1=正在原地旋转，屏蔽 K230
 uint16_t selected_task = 1;
 volatile uint16_t task_running = 0;     // volatile: ISR 写入（盲开超时停车），主循环读取
 uint8_t current_state = 0;
