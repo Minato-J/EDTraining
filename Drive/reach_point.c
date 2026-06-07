@@ -12,6 +12,14 @@ static volatile uint8_t trigger_active = 0;
 static volatile uint8_t tick_counter = 0;
 
 void ReachPoint_Init(void) {
+    // R2: GPIO 输出模式初始化 — PE14/PE15 默认复位为输入，需显式配置
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_14 | GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
     // PE14, PE15 初始高电平 (熄灭/静音)
     HAL_GPIO_WritePin(GPIOE, GPIO_PIN_14, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_SET);
