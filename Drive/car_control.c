@@ -28,12 +28,11 @@ static volatile uint8_t blind_ticks = 0;       // 盲开超时计数器（原 ma
 static volatile float turn_out_smooth = 0.0f;       // volatile: ISR 写，主循环读（DEBUG_UART + Start 清零）
 
 // ================================================================
-// 外部依赖（由 main.c / task.c / k230_track.c 提供）
+// 外部依赖 — 已消除 extern 全局变量泄漏 (Issue 07)
+//   current_angle / line_sensor_data / k230_data_valid → Car_SensorInputs in
+//   target_v_left / target_v_right / emergency_stop        → Car_ControlOutputs out
+//   pid_angle                                             → angle_pid_ptr (Init 注入)
 // ================================================================
-extern float current_angle;                    // main.c 角度过滤器输出
-extern int16_t target_v_left;                  // main.c 左轮目标速度
-extern int16_t target_v_right;                 // main.c 右轮目标速度
-extern volatile uint16_t task_running;         // task.c 任务运行标志
 
 // ================================================================
 // 辅助函数
@@ -122,15 +121,19 @@ float Car_GetTurnOutSmooth(void) {
 }
 
 // ================================================================
-// 核心控制循环（从 main.c TIM6 ISR 移入，每次 tick 调用）
+// 核心控制循环（TIM6 ISR 每 tick 调用，~20ms）
+// Issue 07: 签名改为 Car_ControlLoop(Car_SensorInputs) → Car_ControlOutputs
+//           消除 5 条 extern 跨模块全局变量泄漏
 // ================================================================
 
-void Car_ControlLoop(void) {
+Car_ControlOutputs Car_ControlLoop(Car_SensorInputs in) {
+    Car_ControlOutputs out = {0};  // 零初始化所有输出字段
+
     // ---- CTRL_PARK: 停车 ----
     if (ctrl_mode == CTRL_PARK) {
-        target_v_left  = 0;
-        target_v_right = 0;
-        return;
+        out.target_v_left  = 0;
+        out.target_v_right = 0;
+        return out;
     }
 
     float last_turn_out = 0.0f;  // 替代原 main.c 局部变量 turn_out
@@ -138,33 +141,33 @@ void Car_ControlLoop(void) {
     // ---- CTRL_TURN: 原地旋转（纯角度P控制） ----
     if (ctrl_mode == CTRL_TURN) {
         blind_ticks = 0;
-        float error = angle_normalize(target_angle - current_angle);
-        last_turn_out = PID_Compute(&pid_angle, error, 0);
+        float error = angle_normalize(target_angle - in.current_angle);
+        last_turn_out = PID_Compute(angle_pid_ptr, error, 0);
     }
     // ---- CTRL_STRAIGHT: 直行（速度PI + 小角度PD补偿，不读K230） ----
     else if (ctrl_mode == CTRL_STRAIGHT) {
-        float error = angle_normalize(target_angle - current_angle);
-        last_turn_out = PID_Compute(&pid_angle, error, 0) * 0.5f;  // 小补偿系数
+        float error = angle_normalize(target_angle - in.current_angle);
+        last_turn_out = PID_Compute(angle_pid_ptr, error, 0) * 0.5f;  // 小补偿系数
     }
     // ---- CTRL_LINE: 循迹（K230 + 双模切换 + 盲开超时保护） ----
     else if (ctrl_mode == CTRL_LINE) {
-        if (k230_data_valid && line_sensor_data != 0x00) {
+        if (in.k230_data_valid && in.line_sensor_data != 0x00) {
             // 有线：K230 循迹
             blind_ticks = 0;
-            target_angle = current_angle;  // H0 特有：同步防抽搐
-            last_turn_out = (float)K230_Get_Turn_Speed(line_sensor_data);
+            target_angle = in.current_angle;  // H0 特有：同步防抽搐
+            last_turn_out = (float)K230_Get_Turn_Speed(in.line_sensor_data);
         } else {
             // 丢线：盲开降级（角度环保持 target_angle）
             blind_ticks++;
             if (blind_ticks > 50) {  // 连续 1 秒无视野 → 紧急停车
                 Car_Stop();
-                task_running = 0;
-                target_v_left  = 0;   // R3: return 前清零，不等下一帧 CTRL_PARK
-                target_v_right = 0;
-                return;
+                out.emergency_stop = 1;      // 通知 ISR 设 task_running=0
+                out.target_v_left  = 0;      // R3: return 前清零，不等下一帧 CTRL_PARK
+                out.target_v_right = 0;
+                return out;
             }
-            float error = angle_normalize(target_angle - current_angle);
-            last_turn_out = PID_Compute(&pid_angle, error, 0);
+            float error = angle_normalize(target_angle - in.current_angle);
+            last_turn_out = PID_Compute(angle_pid_ptr, error, 0);
         }
     }
 
@@ -172,6 +175,8 @@ void Car_ControlLoop(void) {
     // turn_out 平滑滤波 (0.3*old + 0.7*new)
     turn_out_smooth = 0.3f * turn_out_smooth + 0.7f * last_turn_out;
     // 前馈差速合成
-    target_v_left  = base_speed + ff_diff - (int16_t)turn_out_smooth;
-    target_v_right = base_speed - ff_diff + (int16_t)turn_out_smooth;
+    out.target_v_left  = base_speed + ff_diff - (int16_t)turn_out_smooth;
+    out.target_v_right = base_speed - ff_diff + (int16_t)turn_out_smooth;
+
+    return out;
 }
