@@ -228,65 +228,38 @@ static void Run_Task_3(void)
     {
         case 0:
             // ---------------- A→C 对角线段 ----------------
-            target_angle = DIAG_AC_ANGLE;  // -38°
-            base_speed = SPEED_STRAIGHT;   // 60
-            ff_diff = 0;
+            Car_StartLine(DIAG_AC_ANGLE, SPEED_STRAIGHT, 0);       // Issue 06d
             break;
 
         case 1:
             // ---------------- C→B 段 (进弯刹车磨合期) ----------------
-            target_angle = 0.0f;
             t3_wait_tick++;
-            if (t3_wait_tick <= TICK_IN_BRAKE)
-            {
-                base_speed = SPEED_IN_BRAKE;   // 进弯重刹
-            }
-            else
-            {
-                base_speed = SPEED_CURVE_RUN;  // 正常循迹过弯
-            }
-            ff_diff = 0;
+            Car_StartLine(0.0f,
+                (t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN, 0);  // Issue 06d
             break;
 
         case 2:
             // ---------------- B→D 段 (进弯刹车) ----------------
-            target_angle = DIAG_BD_ANGLE;  // -144°
             t3_wait_tick++;
-            if (t3_wait_tick <= TICK_IN_BRAKE)
-            {
-                base_speed = SPEED_IN_BRAKE;
-            }
-            else
-            {
-                base_speed = SPEED_CURVE_RUN;
-            }
-            ff_diff = 0;
+            Car_StartLine(DIAG_BD_ANGLE,
+                (t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN, 0);  // Issue 06d
             break;
 
         case 3:
             // ---------------- D→A 段 (进弯刹车) ----------------
-            target_angle = 180.0f;
             t3_wait_tick++;
-            if (t3_wait_tick <= TICK_IN_BRAKE)
-            {
-                base_speed = SPEED_IN_BRAKE;
-            }
-            else
-            {
-                base_speed = SPEED_CURVE_RUN;
-            }
-            ff_diff = 0;
+            Car_StartLine(180.0f,
+                (t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN, 0);  // Issue 06d
             break;
 
         case 4:
         default:
             // 回到 A 点，停车
+            Car_Stop();        // Issue 06d
             task_running = 0;
-            base_speed = 0;
             count = 0;
             t3_wait_tick = 0;
             t3_last_count = -1;
-            ff_diff = 0;
             break;
     }
 }
