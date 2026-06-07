@@ -64,4 +64,10 @@ main() while(1) 新增 (每循环检测 flag):
 
 ## Blocked by
 
-None — 可独立实施。建议在 Issue 09（边界澄清）之后做，避免改同一区域两次。
+- Issue 08a ✅ — 已完成 (`9d37476`)
+- Issue 08b ✅ — 已完成 (`dacd8d7`)
+- Issue 08c ✅ — 已完成 (`da3448a`)
+
+## Status
+
+✅ 全部子 issue 已实施。ISR ~80 行 → ~45 行 (-44%)，仅保留采集职责。
