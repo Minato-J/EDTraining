@@ -31,11 +31,6 @@ typedef struct {
     uint8_t emergency_stop;     // 盲开超时 → ISR 设 task_running=0
 } Car_ControlOutputs;
 
-// === 全局状态（car_control 模块拥有，task.c 只读） ===
-extern float   target_angle;
-extern int16_t base_speed;
-extern int16_t ff_diff;
-
 // === 模式切换 API ===
 void Car_Init(PID_TypeDef *angle_pid);   // 上电初始化（注入角度环 PID 指针），默认 CTRL_PARK
 Car_ControlOutputs Car_ControlLoop(Car_SensorInputs in);  // TIM6 ISR 每 tick 调用，根据 ctrl_mode 分发
@@ -60,5 +55,8 @@ void Car_SetFFDiff(int16_t diff);       // 调整前馈差速
 // === 状态查询 ===
 ctrl_mode_t Car_GetMode(void);          // 查询当前控制模式
 float Car_GetTurnOutSmooth(void);       // 查询转弯量平滑值（调试用）
+float   Car_GetTargetAngle(void);       // 查询当前 target_angle
+int16_t Car_GetBaseSpeed(void);         // 查询当前 base_speed
+int16_t Car_GetFFDiff(void);            // 查询当前 ff_diff
 
 #endif

@@ -13,11 +13,11 @@
 #include <math.h>
 
 // ================================================================
-// 全局状态（car_control 模块拥有，原散布于 main.c 和 task.c）
+// 全局状态（car_control 模块拥有，外部只读通过 getter，仅 API 函数写入）
 // ================================================================
-float   target_angle = 0.0f;
-int16_t base_speed   = 0;
-int16_t ff_diff      = 0;
+static float   target_angle = 0.0f;
+static int16_t base_speed   = 0;
+static int16_t ff_diff      = 0;
 
 // ================================================================
 // 内部状态
@@ -119,6 +119,11 @@ ctrl_mode_t Car_GetMode(void) {
 float Car_GetTurnOutSmooth(void) {
     return turn_out_smooth;
 }
+
+// === getter: 外部只读访问内部状态 ===
+float   Car_GetTargetAngle(void) { return target_angle; }
+int16_t Car_GetBaseSpeed(void)   { return base_speed; }
+int16_t Car_GetFFDiff(void)      { return ff_diff; }
 
 // ================================================================
 // 核心控制循环（TIM6 ISR 每 tick 调用，~20ms）

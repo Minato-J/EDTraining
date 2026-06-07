@@ -191,7 +191,7 @@ int main(void)
 		          int len = sprintf(debug_buf, "%d,%d,%.1f,%.1f,%d,%.1f
 ",
 	              current_v_left, current_v_right,
-	              current_angle, target_angle,
+	              current_angle, Car_GetTargetAngle(),
 	              line_sensor_data, Car_GetTurnOutSmooth());
 	          HAL_UART_Transmit(&huart1, (uint8_t*)debug_buf, len, 10);
 	      }
