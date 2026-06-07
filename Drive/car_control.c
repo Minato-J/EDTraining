@@ -158,6 +158,8 @@ void Car_ControlLoop(void) {
             if (blind_ticks > 50) {  // 连续 1 秒无视野 → 紧急停车
                 Car_Stop();
                 task_running = 0;
+                target_v_left  = 0;   // R3: return 前清零，不等下一帧 CTRL_PARK
+                target_v_right = 0;
                 return;
             }
             float error = angle_normalize(target_angle - current_angle);
