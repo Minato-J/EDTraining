@@ -3,7 +3,7 @@
 
 #include "stdint.h"
 
-extern uint8_t line_sensor_data;
+extern volatile uint8_t line_sensor_data;      // volatile: USART3 ISR 写，TIM6 ISR 读
 extern uint8_t k230_rx_data;
 extern volatile uint8_t k230_data_valid;   // Issue 02: 帧新鲜度标志
 void K230_Parse_Byte(uint8_t byte);

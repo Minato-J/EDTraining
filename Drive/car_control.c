@@ -22,9 +22,9 @@ int16_t ff_diff      = 0;
 // ================================================================
 // 内部状态
 // ================================================================
-static ctrl_mode_t ctrl_mode = CTRL_PARK;
+static volatile ctrl_mode_t ctrl_mode = CTRL_PARK;  // volatile: 主循环写，ISR 读
 static volatile uint8_t blind_ticks = 0;       // 盲开超时计数器（原 main.c 文件级变量）
-static float turn_out_smooth = 0.0f;           // 转弯量低通滤波值（原 main.c 文件级变量）
+static volatile float turn_out_smooth = 0.0f;       // volatile: ISR 写，主循环读（DEBUG_UART + Start 清零）
 
 // ================================================================
 // 外部依赖（由 main.c / task.c / k230_track.c 提供）

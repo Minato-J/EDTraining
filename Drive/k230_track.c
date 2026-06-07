@@ -1,6 +1,6 @@
 #include "k230_track.h"
 
-uint8_t line_sensor_data = 0x00;
+volatile uint8_t line_sensor_data = 0x00;       // volatile: USART3 ISR 写，TIM6 ISR 读
 uint8_t k230_rx_data = 0;
 volatile uint8_t k230_data_valid = 0;        // Issue 02: 帧新鲜度
 static volatile uint8_t k230_timeout_cnt = 0; // Issue 02: 超时计数器
