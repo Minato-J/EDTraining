@@ -155,7 +155,7 @@ int main(void)
 		PID_Velocity_Init(&pid_vel_right, 15.0f, 3.0f, 1000);
 #endif
 		ReachPoint_Init();
-	Car_Init();                // Issue 06: 显式控制模式初始化
+	Car_Init(&pid_angle);                // Issue 06: 显式控制模式初始化
 	Task_Manager_Init();
 	HAL_UART_Receive_IT(&huart2, &rx_data, 1);    
     HAL_UART_Receive_IT(&huart3, &k230_rx_data, 1);

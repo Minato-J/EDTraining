@@ -22,6 +22,7 @@ int16_t ff_diff      = 0;
 // ================================================================
 // 内部状态
 // ================================================================
+static PID_TypeDef *angle_pid_ptr = NULL;        // Car_Init 注入，替代 extern pid_angle
 static volatile ctrl_mode_t ctrl_mode = CTRL_PARK;  // volatile: 主循环写，ISR 读
 static volatile uint8_t blind_ticks = 0;       // 盲开超时计数器（原 main.c 文件级变量）
 static volatile float turn_out_smooth = 0.0f;       // volatile: ISR 写，主循环读（DEBUG_UART + Start 清零）
@@ -30,7 +31,6 @@ static volatile float turn_out_smooth = 0.0f;       // volatile: ISR 写，主�
 // 外部依赖（由 main.c / task.c / k230_track.c 提供）
 // ================================================================
 extern float current_angle;                    // main.c 角度过滤器输出
-extern PID_TypeDef pid_angle;                  // main.c 角度环 PID
 extern int16_t target_v_left;                  // main.c 左轮目标速度
 extern int16_t target_v_right;                 // main.c 右轮目标速度
 extern volatile uint16_t task_running;         // task.c 任务运行标志
@@ -48,7 +48,8 @@ static float angle_normalize(float diff) {
 // 模式切换 API
 // ================================================================
 
-void Car_Init(void) {
+void Car_Init(PID_TypeDef *angle_pid) {
+    angle_pid_ptr = angle_pid;
     ctrl_mode = CTRL_PARK;
     target_angle = 0.0f;
     base_speed   = 0;

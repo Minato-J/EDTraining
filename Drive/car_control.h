@@ -7,6 +7,7 @@
 #define __CAR_CONTROL_H
 
 #include <stdint.h>
+#include "pid.h"
 
 // === 控制模式枚举 ===
 typedef enum {
@@ -16,14 +17,28 @@ typedef enum {
     CTRL_TURN     = 3   // 原地旋转：纯角度P控制，base_speed自动归零
 } ctrl_mode_t;
 
+// === 每 tick 输入（ISR 在调用前组装，消除 extern 跨模块泄漏）===
+typedef struct {
+    float   current_angle;      // main.c 角度过滤器输出
+    uint8_t line_sensor_data;   // K230 6 路灰度原始值
+    uint8_t k230_data_valid;    // K230 帧新鲜度标志
+} Car_SensorInputs;
+
+// === 每 tick 输出（ISR 在调用后消费）===
+typedef struct {
+    int16_t target_v_left;      // 左轮目标速度 → speed PID
+    int16_t target_v_right;     // 右轮目标速度 → speed PID
+    uint8_t emergency_stop;     // 盲开超时 → ISR 设 task_running=0
+} Car_ControlOutputs;
+
 // === 全局状态（car_control 模块拥有，task.c 只读） ===
 extern float   target_angle;
 extern int16_t base_speed;
 extern int16_t ff_diff;
 
 // === 模式切换 API ===
-void Car_Init(void);                    // 上电初始化，默认 CTRL_PARK
-void Car_ControlLoop(void);             // TIM6 ISR 每 tick 调用，根据 ctrl_mode 分发
+void Car_Init(PID_TypeDef *angle_pid);   // 上电初始化（注入角度环 PID 指针），默认 CTRL_PARK
+Car_ControlOutputs Car_ControlLoop(Car_SensorInputs in);  // TIM6 ISR 每 tick 调用，根据 ctrl_mode 分发
 void Car_Stop(void);                    // 切 CTRL_PARK + 清零累加器
 void Car_ResetState(void);              // Start 时清零内部累积状态（替代 ControlState_Reset 中 car_control 部分）
 
