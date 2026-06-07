@@ -44,5 +44,6 @@ void Car_SetFFDiff(int16_t diff);       // 调整前馈差速
 
 // === 状态查询 ===
 ctrl_mode_t Car_GetMode(void);          // 查询当前控制模式
+float Car_GetTurnOutSmooth(void);       // 查询转弯量平滑值（调试用）
 
 #endif

@@ -116,6 +116,10 @@ ctrl_mode_t Car_GetMode(void) {
     return ctrl_mode;
 }
 
+float Car_GetTurnOutSmooth(void) {
+    return turn_out_smooth;
+}
+
 // ================================================================
 // 核心控制循环（从 main.c TIM6 ISR 移入，每次 tick 调用）
 // ================================================================

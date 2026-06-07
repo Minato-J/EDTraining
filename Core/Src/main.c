@@ -35,6 +35,7 @@
 #include "oled.h"
 #include "yaw_track.h"
 #include "reach_point.h"   // Issue 03: 声光指示
+#include "car_control.h"  // Issue 06: 显式控制模式
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,18 +57,12 @@ int16_t target_v_right = 0; // 右轮独立目标
 int16_t current_v_left = 0;
 int16_t current_v_right = 0; 
 
-//=== 角度环 === 
-PID_TypeDef pid_angle;      
-float Yaw_Offset = 0;        
-float target_angle = 0;    
+//=== 角度环 ===
+PID_TypeDef pid_angle;
+float Yaw_Offset = 0;
 float current_angle = 0;
-int16_t base_speed = 0;
-float turn_out;
 uint8_t angle_initialized = 0;   // 角度过滤器哨兵—任务启动时由 task.c 清零
-volatile uint8_t blind_ticks = 0;      // P1#3: ISR盲开超时计数，提升为文件级供 Start 清零
-volatile float turn_out_smooth = 0;    // P2#5: ISR转弯平滑值，提升为文件级供 Start 清零
 extern uint8_t lap_count;
-extern uint8_t rotating;       // 旋转阶段标志 (task.c)
 
 #ifdef DEBUG_UART               // Issue 04: UART1 调试输出
 	static char debug_buf[80];
@@ -160,6 +155,7 @@ int main(void)
 		PID_Velocity_Init(&pid_vel_right, 15.0f, 3.0f, 1000);
 #endif
 		ReachPoint_Init();
+	Car_Init();                // Issue 06: 显式控制模式初始化
 	Task_Manager_Init();
 	HAL_UART_Receive_IT(&huart2, &rx_data, 1);    
     HAL_UART_Receive_IT(&huart3, &k230_rx_data, 1);
@@ -196,7 +192,7 @@ int main(void)
 ",
 	              current_v_left, current_v_right,
 	              current_angle, target_angle,
-	              line_sensor_data, turn_out_smooth);
+	              line_sensor_data, Car_GetTurnOutSmooth());
 	          HAL_UART_Transmit(&huart1, (uint8_t*)debug_buf, len, 10);
 	      }
 #endif
@@ -262,8 +258,7 @@ void SystemClock_Config(void)
 // P2#5: turn_out_smooth 归零 → 新任务首帧差速不受旧转弯量污染
 // P2#8: PID 状态重置 → 积分/上次误差/输出归零
 void ControlState_Reset(void) {
-    blind_ticks = 0;
-    turn_out_smooth = 0;
+    Car_ResetState();     // Issue 06: 清零 blind_ticks + turn_out_smooth（已移入 car_control）
     PID_Init(&pid_left, 0.9f, 0.12f, 0.0f, 500.0f);
     PID_Init(&pid_right, 0.8f, 0.12f, 0.0f, 500.0f);
     PID_Init(&pid_angle, 1.2f, 0.0f, 0.6f, 40.0f);
@@ -331,59 +326,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         // yaw_cumulative 追踪：每帧累加航向变化量
         YawTrack_Update(current_angle);
         skip_angle_update:   // NaN 哨兵跳转点：跳过本帧角度更新但继续执行控制
-        // ================= 2. 核心大脑：控制权分配 (双模切换) =================
-        if (task_running == 1)
-        {
-            // ---- 盲开超时保护: 连续 0x00 超过 1 秒触发紧急停车 ----
-            // blind_ticks 已提升为文件级变量 (P1#3: Start 时清零)
-
-            if (rotating)
-            {
-                // ---- 【模式 R：旋转阶段】纯 IMU 角度环控制，完全无视 K230 ----
-                blind_ticks = 0;
-                float angle_error = target_angle - current_angle;
-                while (angle_error > 180.0f)  angle_error -= 360.0f;
-                while (angle_error < -180.0f) angle_error += 360.0f;
-                turn_out = PID_Compute(&pid_angle, angle_error, 0);
-            }
-            else if (line_sensor_data == 0x00 || !k230_data_valid)  // Issue 02
-            {
-                // ---- 【模式 A：盲开模式】没有黑线，全白！听陀螺仪的，死死保住目标角度 ----
-                blind_ticks++;
-                if (blind_ticks > 50)  // 连续 1 秒无视野 → 紧急停车
-                {
-                    base_speed = 0;
-                    task_running = 0;
-                    blind_ticks = 0;
-                }
-                else
-                {
-                    float angle_error = target_angle - current_angle;
-                    while (angle_error > 180.0f)  angle_error -= 360.0f;
-                    while (angle_error < -180.0f) angle_error += 360.0f;
-                    turn_out = PID_Compute(&pid_angle, angle_error, 0);
-                }
-            }
-            else
-            {
-                // ---- 【模式 B：循迹模式】看到黑线了！抛弃陀螺仪，听摄像头的！ ----
-                blind_ticks = 0;
-                // 同步目标角度，防止脱线切回盲开瞬间产生剧烈抽搐
-                target_angle = current_angle;
-                turn_out = K230_Get_Turn_Speed(line_sensor_data);
-            }
-            // ================= 3. turn_out 平滑滤波 (防抖) =================
-            // turn_out_smooth 已提升为文件级变量 (P2#5: Start 时清零)
-            turn_out_smooth = 0.3f * turn_out_smooth + 0.7f * turn_out;
-
-            target_v_left  = base_speed + ff_diff - (int16_t)turn_out_smooth;
-            target_v_right = base_speed - ff_diff + (int16_t)turn_out_smooth;
-        }
-        else 
-        {
-            target_v_left = 0;
-            target_v_right = 0;
-        }
+        // ================= 2. 核心大脑：Car_ControlLoop 统一调度 (Issue 06) =================
+        // 替换原 ~50 行双模切换 (rotating/blind/line) + turn_out 平滑 + 差速合成
+        Car_ControlLoop();
         // ================= 3. 底层肌肉：速度环 PID =================
         // === 左轮 ===
         int16_t raw_l = Encoder_Get_Count_Left();

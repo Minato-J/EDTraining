@@ -30,6 +30,7 @@
 #include "math.h"
 #include "yaw_track.h"
 #include "reach_point.h"   // Issue 03
+#include "car_control.h"  // Issue 06: 显式控制模式
 
 extern float target_angle;
 extern int16_t base_speed;
@@ -680,6 +681,6 @@ void Task_Dispatcher(void)
     }
     else
     {
-        base_speed = 0;
+        Car_Stop();   // Issue 06: 停工时切 CTRL_PARK，替代 base_speed=0
     }
 }
