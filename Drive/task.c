@@ -122,16 +122,22 @@ void Task_Key_Scan(void)
 // ================================================================
 static void Run_Task_1(void)
 {
-    if (count == 0)
+    static int t1_last_count = -1;
+
+    // R5: 仅在 count 变化时调用 Car_StartLine，避免每 tick 重置 turn_out_smooth
+    if (count != t1_last_count)
     {
-        Car_SetTargetAngle(0.0f);                // R1: 独立setter，不重置平滑状态
-        Car_SetSpeed(BASE_SPEED_STRAIGHT);
-        Car_SetFFDiff(0);
-    }
-    else if (count == 1)
-    {
-        Car_Stop();        // Issue 06c
-        task_running = 0;
+        t1_last_count = count;
+        if (count == 0)
+        {
+            Car_StartLine(0.0f, BASE_SPEED_STRAIGHT, 0);
+        }
+        else if (count == 1)
+        {
+            Car_Stop();
+            task_running = 0;
+            t1_last_count = -1;
+        }
     }
 }
 
@@ -142,13 +148,40 @@ static void Run_Task_2(void)
 {
     static int t2_last_count = -1;
 
-    // 检测 count 变化：首次进入新路段时调用 Reset
+    // R5: 仅在 count 变化时调用 Car_StartLine（模式切换 + 参数设置一次性完成）
     if (count != t2_last_count)
     {
         t2_last_count = count;
         // 进入弯道段时重置角度累计追踪
         if (count == 1 || count == 3)
             YawTrack_Reset(current_angle);
+
+        switch (count)
+        {
+            case 0:
+                // A→B 直线段，保持初始朝向
+                Car_StartLine(0.0f, BASE_SPEED_STRAIGHT, 0);
+                break;
+            case 1:
+                // B→C 右半圆弧
+                Car_StartLine(RIGHT_HALF_CIRCLE, BASE_SPEED_CURVE, 10);
+                break;
+            case 2:
+                // C→D 直线段，朝向 180°
+                Car_StartLine(180.0f, BASE_SPEED_STRAIGHT, 0);
+                break;
+            case 3:
+                // D→A 左半圆弧
+                Car_StartLine(LEFT_HALF_CIRCLE, BASE_SPEED_CURVE, -10);
+                break;
+            case 4:
+            default:
+                // 回到 A，停车
+                Car_Stop();
+                task_running = 0;
+                t2_last_count = -1;
+                break;
+        }
     }
 
     // 弯道段兜底：半圆弧 ~90° → 阈值 110° (P1#5: 按实际角度校准)
@@ -158,44 +191,6 @@ static void Run_Task_2(void)
         count++;
         count_debounce = DEBOUNCE_INIT;
         __enable_irq();
-    }
-
-    switch (count)
-    {
-        case 0:
-            // A→B 直线段，保持初始朝向
-            Car_SetTargetAngle(0.0f);                // R1: 独立setter
-            Car_SetSpeed(BASE_SPEED_STRAIGHT);
-            Car_SetFFDiff(0);
-            break;
-
-        case 1:
-            // B→C 右半圆弧
-            Car_SetTargetAngle(RIGHT_HALF_CIRCLE);   // R1: 独立setter
-            Car_SetSpeed(BASE_SPEED_CURVE);
-            Car_SetFFDiff(10);
-            break;
-
-        case 2:
-            // C→D 直线段，朝向 180°
-            Car_SetTargetAngle(180.0f);              // R1: 独立setter
-            Car_SetSpeed(BASE_SPEED_STRAIGHT);
-            Car_SetFFDiff(0);
-            break;
-
-        case 3:
-            // D→A 左半圆弧
-            Car_SetTargetAngle(LEFT_HALF_CIRCLE);    // R1: 独立setter
-            Car_SetSpeed(BASE_SPEED_CURVE);
-            Car_SetFFDiff(-10);
-            break;
-
-        case 4:
-        default:
-            // 回到 A，停车
-            Car_Stop();        // Issue 06c
-            task_running = 0;
-            break;
     }
 }
 
@@ -208,7 +203,7 @@ static void Run_Task_3(void)
     static int t3_wait_tick = 0;
     static int t3_last_count = -1;
 
-    // 【核心机制】count 改变时重置计时器和角度追踪
+    // R5: count 变化时 Car_StartLine 一次性完成模式切换 + 参数初始化
     if (count != t3_last_count)
     {
         t3_wait_tick = 0;
@@ -216,6 +211,44 @@ static void Run_Task_3(void)
         // 进入弯道段时重置角度累计追踪
         if (count == 1 || count == 2 || count == 3)
             YawTrack_Reset(current_angle);
+
+        switch (count)
+        {
+            case 0:
+                // A→C 对角线段
+                Car_StartLine(DIAG_AC_ANGLE, SPEED_STRAIGHT, 0);
+                break;
+            case 1:
+                // C→B 段：初始刹车速度，后续 tick 逐步放开
+                Car_StartLine(0.0f, SPEED_IN_BRAKE, 0);
+                break;
+            case 2:
+                // B→D 段：初始刹车速度
+                Car_StartLine(DIAG_BD_ANGLE, SPEED_IN_BRAKE, 0);
+                break;
+            case 3:
+                // D→A 段：初始刹车速度
+                Car_StartLine(180.0f, SPEED_IN_BRAKE, 0);
+                break;
+            case 4:
+            default:
+                // 回到 A 点，停车
+                Car_Stop();
+                task_running = 0;
+                count = 0;
+                t3_wait_tick = 0;
+                t3_last_count = -1;
+                return;  // Car_Stop 已处理，跳过后续刹车调整
+        }
+    }
+    else
+    {
+        // R5: 同一路段后续 tick — 仅调整动态刹车速度，不重置模式和 turn_out_smooth
+        if (count == 1 || count == 2 || count == 3)
+        {
+            t3_wait_tick++;
+            Car_SetSpeed((t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN);
+        }
     }
 
     // 弯道段兜底：按各弧段实际角度校准阈值 (P1#5)
@@ -228,50 +261,6 @@ static void Run_Task_3(void)
             count_debounce = DEBOUNCE_INIT;
             __enable_irq();
         }
-    }
-
-    switch (count)
-    {
-        case 0:
-            // ---------------- A→C 对角线段 ----------------
-            Car_SetTargetAngle(DIAG_AC_ANGLE);               // R1: 独立setter
-            Car_SetSpeed(SPEED_STRAIGHT);
-            Car_SetFFDiff(0);
-            break;
-
-        case 1:
-            // ---------------- C→B 段 (进弯刹车磨合期) ----------------
-            Car_SetTargetAngle(0.0f);                        // R1: 独立setter
-            t3_wait_tick++;
-            Car_SetSpeed((t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN);
-            Car_SetFFDiff(0);
-            break;
-
-        case 2:
-            // ---------------- B→D 段 (进弯刹车) ----------------
-            Car_SetTargetAngle(DIAG_BD_ANGLE);               // R1: 独立setter
-            t3_wait_tick++;
-            Car_SetSpeed((t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN);
-            Car_SetFFDiff(0);
-            break;
-
-        case 3:
-            // ---------------- D→A 段 (进弯刹车) ----------------
-            Car_SetTargetAngle(180.0f);                      // R1: 独立setter
-            t3_wait_tick++;
-            Car_SetSpeed((t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN);
-            Car_SetFFDiff(0);
-            break;
-
-        case 4:
-        default:
-            // 回到 A 点，停车
-            Car_Stop();        // Issue 06d
-            task_running = 0;
-            count = 0;
-            t3_wait_tick = 0;
-            t3_last_count = -1;
-            break;
     }
 }
 
@@ -289,9 +278,7 @@ static void Run_Task_4(void)
 
         // 状态 0: 第一圈 - A点起步 -> 目标 -38度 (不停车)
         case 0:
-            Car_SetSpeed(60);  // Issue 06e
-            Car_SetTargetAngle(-38.0f);  // Issue 06e
-            Car_SetFFDiff(0);  // Issue 06e
+            Car_StartLine(-38.0f, 60, 0);  // R5: 一次性模式切换 + 参数设置
             count = 0;
             YawTrack_Reset(current_angle);
             current_state = 1;
@@ -299,9 +286,9 @@ static void Run_Task_4(void)
 
         // 状态 1: 第一圈 - 保持对角推进 A→C (~38°) -> 等待触发 C 点
         case 1:
-            Car_SetTargetAngle(-38.0f);  // Issue 06e
-            Car_SetSpeed(60);  // Issue 06e
-            Car_SetFFDiff(0);  // Issue 06e
+            Car_SetTargetAngle(-38.0f);  // R1+R5: 每 tick 仅调参，不重置 turn_out_smooth
+            Car_SetSpeed(60);
+            Car_SetFFDiff(0);
 
             if (count >= 1 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
@@ -312,8 +299,7 @@ static void Run_Task_4(void)
 
         // 状态 2: 第一圈 - C点换方向 -> 目标 0度 (不停车)
         case 2:
-            Car_SetSpeed(30);  // Issue 06e
-            Car_SetTargetAngle(0.0f);  // Issue 06e
+            Car_StartLine(0.0f, 30, 0);  // R5: 一次性模式切换 + 参数设置
             count = 1;
             YawTrack_Reset(current_angle);
             current_state = 3;
@@ -321,9 +307,9 @@ static void Run_Task_4(void)
 
         // 状态 3: 第一圈 - 保持 0 度推进 C→B (~50°) -> 等待 B 点
         case 3:
-            Car_SetSpeed(30);  // Issue 06e
-            Car_SetTargetAngle(0.0f);  // Issue 06e
-            Car_SetFFDiff(0);  // Issue 06e
+            Car_SetSpeed(30);
+            Car_SetTargetAngle(0.0f);
+            Car_SetFFDiff(0);  // R4: 显式清零
 
             if (count >= 2 || YawTrack_IsCurveDone(YAW_THRESH_SMALL_ARC))
             {
@@ -334,8 +320,7 @@ static void Run_Task_4(void)
 
         // 状态 4: 第一圈 - B点换方向 -> 目标 -146度 (逐圈微调)
         case 4:
-            Car_SetSpeed(60);  // Issue 06e
-            Car_SetTargetAngle(-146.0f);  // Issue 06e
+            Car_StartLine(-146.0f, 60, 0);  // R5: 一次性模式切换 + 参数设置
             count = 2;
             YawTrack_Reset(current_angle);
             current_state = 5;
@@ -343,9 +328,9 @@ static void Run_Task_4(void)
 
         // 状态 5: 第一圈 - 保持对角返回 B→D (~144°) -> 等待 D 点
         case 5:
-            Car_SetSpeed(60);  // Issue 06e
-            Car_SetTargetAngle(-146.0f);  // Issue 06e
-            Car_SetFFDiff(0);  // Issue 06e
+            Car_SetSpeed(60);
+            Car_SetTargetAngle(-146.0f);
+            Car_SetFFDiff(0);  // R4: 显式清零
 
             if (count >= 3 || YawTrack_IsCurveDone(YAW_THRESH_DIAG))
             {
@@ -356,8 +341,7 @@ static void Run_Task_4(void)
 
         // 状态 6: 第一圈 - D点换方向 -> 目标 180度 (不停车)
         case 6:
-            Car_SetSpeed(30);  // Issue 06e
-            Car_SetTargetAngle(180.0f);  // Issue 06e
+            Car_StartLine(180.0f, 30, 0);  // R5: 一次性模式切换 + 参数设置
             count = 3;
             YawTrack_Reset(current_angle);
             current_state = 7;
@@ -365,9 +349,9 @@ static void Run_Task_4(void)
 
         // 状态 7: 第一圈 - 直行冲向 A 点 (直道 ~0°) -> 触发后切入第二圈
         case 7:
-            Car_SetSpeed(30);  // Issue 06e
-            Car_SetTargetAngle(180.0f);  // Issue 06e
-            Car_SetFFDiff(0);  // Issue 06e
+            Car_SetSpeed(30);
+            Car_SetTargetAngle(180.0f);
+            Car_SetFFDiff(0);  // R4: 显式清零
 
             if (count >= 4 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))   // 直道: count 为主
             {
@@ -385,8 +369,7 @@ static void Run_Task_4(void)
 
         // 状态 10: 第二圈 - A点起步 -> 目标 -34度 (逐圈微调)
         case 10:
-            Car_SetSpeed(60);  // Issue 06e
-            Car_SetTargetAngle(-34.0f);  // Issue 06e
+            Car_StartLine(-34.0f, 60, 0);  // R5: 一次性模式切换 + 参数设置
             count = 0;
             YawTrack_Reset(current_angle);
             current_state = 11;
@@ -394,9 +377,9 @@ static void Run_Task_4(void)
 
         // 状态 11: 第二圈 - 保持对角推进 A→C (~34°) -> 等待触发 C 点
         case 11:
-            Car_SetTargetAngle(-34.0f);  // Issue 06e
-            Car_SetSpeed(60);  // Issue 06e
-            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
+            Car_SetTargetAngle(-34.0f);
+            Car_SetSpeed(60);
+            Car_SetFFDiff(0);  // R4: 显式清零
 
             if (count >= 1 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
@@ -407,8 +390,7 @@ static void Run_Task_4(void)
 
         // 状态 12: 第二圈 - C点换方向 -> 目标 0度 (不停车)
         case 12:
-            Car_SetSpeed(30);  // Issue 06e
-            Car_SetTargetAngle(0.0f);  // Issue 06e
+            Car_StartLine(0.0f, 30, 0);  // R5: 一次性模式切换 + 参数设置
             count = 1;
             YawTrack_Reset(current_angle);
             current_state = 13;
@@ -416,9 +398,9 @@ static void Run_Task_4(void)
 
         // 状态 13: 第二圈 - 保持 0 度推进 C→B (~50°) -> 等待 B 点
         case 13:
-            Car_SetSpeed(30);  // Issue 06e
-            Car_SetTargetAngle(0.0f);  // Issue 06e
-            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
+            Car_SetSpeed(30);
+            Car_SetTargetAngle(0.0f);
+            Car_SetFFDiff(0);  // R4: 显式清零
 
             if (count >= 2 || YawTrack_IsCurveDone(YAW_THRESH_SMALL_ARC))
             {
@@ -429,8 +411,7 @@ static void Run_Task_4(void)
 
         // 状态 14: 第二圈 - B点换方向 -> 目标 -148度 (逐圈微调)
         case 14:
-            Car_SetSpeed(60);  // Issue 06e
-            Car_SetTargetAngle(-148.0f);  // Issue 06e
+            Car_StartLine(-148.0f, 60, 0);  // R5: 一次性模式切换 + 参数设置
             count = 2;
             YawTrack_Reset(current_angle);
             current_state = 15;
@@ -438,9 +419,9 @@ static void Run_Task_4(void)
 
         // 状态 15: 第二圈 - 保持对角返回 B→D (~148°) -> 等待 D 点
         case 15:
-            Car_SetSpeed(60);  // Issue 06e
-            Car_SetTargetAngle(-148.0f);  // Issue 06e
-            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
+            Car_SetSpeed(60);
+            Car_SetTargetAngle(-148.0f);
+            Car_SetFFDiff(0);  // R4: 显式清零
 
             if (count >= 3 || YawTrack_IsCurveDone(YAW_THRESH_DIAG))
             {
@@ -451,8 +432,7 @@ static void Run_Task_4(void)
 
         // 状态 16: 第二圈 - D点换方向 -> 目标 180度 (不停车)
         case 16:
-            Car_SetSpeed(30);  // Issue 06e
-            Car_SetTargetAngle(180.0f);  // Issue 06e
+            Car_StartLine(180.0f, 30, 0);  // R5: 一次性模式切换 + 参数设置
             count = 3;
             YawTrack_Reset(current_angle);
             current_state = 17;
@@ -460,9 +440,9 @@ static void Run_Task_4(void)
 
         // 状态 17: 第二圈 - 直行冲向 A 点 (直道 ~0°) -> 触发后切入最后一圈
         case 17:
-            Car_SetSpeed(30);  // Issue 06e
-            Car_SetTargetAngle(180.0f);  // Issue 06e
-            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
+            Car_SetSpeed(30);
+            Car_SetTargetAngle(180.0f);
+            Car_SetFFDiff(0);  // R4: 显式清零
 
             if (count >= 4 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
@@ -480,8 +460,7 @@ static void Run_Task_4(void)
 
         // 状态 20: 第三圈 - A点起步 -> 目标 -37度 (逐圈微调)
         case 20:
-            Car_SetSpeed(60);  // Issue 06e
-            Car_SetTargetAngle(-37.0f);  // Issue 06e
+            Car_StartLine(-37.0f, 60, 0);  // R5: 一次性模式切换 + 参数设置
             count = 0;
             YawTrack_Reset(current_angle);
             current_state = 21;
@@ -489,9 +468,9 @@ static void Run_Task_4(void)
 
         // 状态 21: 第三圈 - 保持对角推进 A→C (~37°) -> 等待触发 C 点
         case 21:
-            Car_SetTargetAngle(-37.0f);  // Issue 06e
-            Car_SetSpeed(60);  // Issue 06e
-            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
+            Car_SetTargetAngle(-37.0f);
+            Car_SetSpeed(60);
+            Car_SetFFDiff(0);  // R4: 显式清零
 
             if (count >= 1 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
@@ -502,8 +481,7 @@ static void Run_Task_4(void)
 
         // 状态 22: 第三圈 - C点换方向 -> 目标 0度 (不停车)
         case 22:
-            Car_SetSpeed(30);  // Issue 06e
-            Car_SetTargetAngle(0.0f);  // Issue 06e
+            Car_StartLine(0.0f, 30, 0);  // R5: 一次性模式切换 + 参数设置
             count = 1;
             YawTrack_Reset(current_angle);
             current_state = 23;
@@ -511,9 +489,9 @@ static void Run_Task_4(void)
 
         // 状态 23: 第三圈 - 保持 0 度推进 C→B (~50°) -> 等待 B 点
         case 23:
-            Car_SetSpeed(30);  // Issue 06e
-            Car_SetTargetAngle(0.0f);  // Issue 06e
-            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
+            Car_SetSpeed(30);
+            Car_SetTargetAngle(0.0f);
+            Car_SetFFDiff(0);  // R4: 显式清零
 
             if (count >= 2 || YawTrack_IsCurveDone(YAW_THRESH_SMALL_ARC))
             {
@@ -524,8 +502,7 @@ static void Run_Task_4(void)
 
         // 状态 24: 第三圈 - B点换方向 -> 目标 -146度 (逐圈微调)
         case 24:
-            Car_SetSpeed(60);  // Issue 06e
-            Car_SetTargetAngle(-146.0f);  // Issue 06e
+            Car_StartLine(-146.0f, 60, 0);  // R5: 一次性模式切换 + 参数设置
             count = 2;
             YawTrack_Reset(current_angle);
             current_state = 25;
@@ -534,9 +511,9 @@ static void Run_Task_4(void)
         // 状态 25: 第三圈 - 保持对角返回 B→D (~147°) -> 等待 D 点
         //          (最后一圈 angle 微调为 -147°)
         case 25:
-            Car_SetSpeed(60);  // Issue 06e
-            Car_SetTargetAngle(-147.0f);  // Issue 06e
-            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
+            Car_SetSpeed(60);
+            Car_SetTargetAngle(-147.0f);
+            Car_SetFFDiff(0);  // R4: 显式清零
 
             if (count >= 3 || YawTrack_IsCurveDone(YAW_THRESH_DIAG))
             {
@@ -547,8 +524,7 @@ static void Run_Task_4(void)
 
         // 状态 26: 第三圈 - D点换方向 -> 目标 180度 (不停车)
         case 26:
-            Car_SetSpeed(30);  // Issue 06e
-            Car_SetTargetAngle(180.0f);  // Issue 06e
+            Car_StartLine(180.0f, 30, 0);  // R5: 一次性模式切换 + 参数设置
             count = 3;
             YawTrack_Reset(current_angle);
             current_state = 27;
@@ -556,9 +532,9 @@ static void Run_Task_4(void)
 
         // 状态 27: 第三圈 - 直行冲向终点 A 点 (直道 ~0°)
         case 27:
-            Car_SetSpeed(30);  // Issue 06e
-            Car_SetTargetAngle(180.0f);  // Issue 06e
-            Car_SetFFDiff(0);  // R4: 显式清零，防差速残留
+            Car_SetSpeed(30);
+            Car_SetTargetAngle(180.0f);
+            Car_SetFFDiff(0);  // R4: 显式清零
 
             if (count >= 4 || YawTrack_IsCurveDone(YAW_THRESH_SHORT_ARC))
             {
@@ -586,12 +562,29 @@ static void Run_Task_5(void)
 {
     static int t5_last_count = -1;
 
-    // 检测 count 变化：首次进入新路段时调用 Reset
+    // R5: count 变化时 Car_StartLine 一次性完成模式切换 + 参数设置
     if (count != t5_last_count)
     {
         t5_last_count = count;
+        // 进入弯道段时重置角度累计追踪
         if (count == 1 || count == 3)
             YawTrack_Reset(current_angle);
+
+        switch (count)
+        {
+            case 0:
+                Car_StartLine(DIAG_AC_ANGLE, BASE_SPEED_STRAIGHT, 0);
+                break;
+            case 1:
+                Car_StartLine(RIGHT_HALF_CIRCLE, BASE_SPEED_CURVE, 10);
+                break;
+            case 2:
+                Car_StartLine(DIAG_BD_ANGLE, BASE_SPEED_STRAIGHT, 0);
+                break;
+            case 3:
+                Car_StartLine(LEFT_HALF_CIRCLE, BASE_SPEED_CURVE, -10);
+                break;
+        }
     }
 
     if (count >= 4)
@@ -599,7 +592,7 @@ static void Run_Task_5(void)
         lap_count++;
         if (lap_count >= 4)
         {
-            Car_Stop();        // Issue 06c
+            Car_Stop();
             task_running = 0;
             lap_count = 0;
             t5_last_count = -1;
@@ -607,7 +600,10 @@ static void Run_Task_5(void)
         }
         else
         {
+            // R5: 圈数过渡 — 立即设 count=0 参数，避免等待下一 tick
             count = 0;
+            t5_last_count = 0;
+            Car_StartLine(DIAG_AC_ANGLE, BASE_SPEED_STRAIGHT, 0);
         }
     }
 
@@ -618,31 +614,6 @@ static void Run_Task_5(void)
         count++;
         count_debounce = DEBOUNCE_INIT;
         __enable_irq();
-    }
-
-    if (count == 0)
-    {
-        Car_SetTargetAngle(DIAG_AC_ANGLE);           // R1: 独立setter
-        Car_SetSpeed(BASE_SPEED_STRAIGHT);
-        Car_SetFFDiff(0);
-    }
-    else if (count == 1)
-    {
-        Car_SetTargetAngle(RIGHT_HALF_CIRCLE);       // R1: 独立setter
-        Car_SetSpeed(BASE_SPEED_CURVE);
-        Car_SetFFDiff(10);
-    }
-    else if (count == 2)
-    {
-        Car_SetTargetAngle(DIAG_BD_ANGLE);           // R1: 独立setter
-        Car_SetSpeed(BASE_SPEED_STRAIGHT);
-        Car_SetFFDiff(0);
-    }
-    else if (count == 3)
-    {
-        Car_SetTargetAngle(LEFT_HALF_CIRCLE);        // R1: 独立setter
-        Car_SetSpeed(BASE_SPEED_CURVE);
-        Car_SetFFDiff(-10);
     }
 }
 
