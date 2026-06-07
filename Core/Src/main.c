@@ -64,6 +64,12 @@ float current_angle = 0;
 uint8_t angle_initialized = 0;   // 角度过滤器哨兵—任务启动时由 task.c 清零
 extern uint8_t lap_count;
 
+	// Issue 08a: ISR→主循环 数据传递快照
+	volatile uint8_t   isr_control_ready = 0;    // ISR 置1，主循环消费后清0
+	volatile Car_SensorInputs isr_snapshot_in;     // ISR 写入的角度/传感器快照
+	volatile int16_t   isr_snapshot_raw_l = 0;    // ISR 写入的左编码器原始值
+	volatile int16_t   isr_snapshot_raw_r = 0;    // ISR 写入的右编码器原始值
+
 #ifdef DEBUG_UART               // Issue 04: UART1 调试输出
 	static char debug_buf[80];
 	static volatile uint8_t debug_tick_cnt = 0;
@@ -326,6 +332,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         // yaw_cumulative 追踪：每帧累加航向变化量
         YawTrack_Update(current_angle);
         skip_angle_update:   // NaN 哨兵跳转点：跳过本帧角度更新但继续执行控制
+
+        // ================= Issue 08a: ISR 快照区（供主循环消费） =================
+        isr_snapshot_raw_l = Encoder_Get_Count_Left();
+        isr_snapshot_raw_r = Encoder_Get_Count_Right();
+        isr_snapshot_in.current_angle    = current_angle;
+        isr_snapshot_in.line_sensor_data = line_sensor_data;
+        isr_snapshot_in.k230_data_valid  = k230_data_valid;
+        isr_control_ready = 1;
+
         // ================= 2. 核心大脑：Car_ControlLoop 统一调度 (Issue 06) =================
         // 替换原 ~50 行双模切换 (rotating/blind/line) + turn_out 平滑 + 差速合成
         Car_SensorInputs in = {current_angle, line_sensor_data, k230_data_valid};
