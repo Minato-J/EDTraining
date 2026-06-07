@@ -2,6 +2,9 @@
 
 uint8_t line_sensor_data = 0x00;
 uint8_t k230_rx_data = 0;
+volatile uint8_t k230_data_valid = 0;        // Issue 02: 帧新鲜度
+static volatile uint8_t k230_timeout_cnt = 0; // Issue 02: 超时计数器
+#define K230_TIMEOUT_TICKS 5                 // 5 ticks × 20ms = 100ms 超时
 
 void K230_Parse_Byte(uint8_t byte) 
 {
@@ -18,8 +21,10 @@ void K230_Parse_Byte(uint8_t byte)
             else state = 0;
             break;
         case 2:
-            line_sensor_data = byte;  
-            state = 0;             
+            line_sensor_data = byte;
+            k230_data_valid = 1;       // Issue 02: 帧新鲜度置位
+            k230_timeout_cnt = 0;      // Issue 02: 归零超时计数
+            state = 0;
             break;
         default:
             state = 0;
@@ -71,4 +76,20 @@ int16_t K230_Get_Turn_Speed(uint8_t sensor_val)
 
     last_turn = turn_speed;
     return turn_speed;
+}
+
+// ---- Issue 02: K230 数据新鲜度管理 ----
+// 每 TIM6 tick (20ms) 递增超时计数，超时后清零 valid
+void K230_Timeout_Tick(void) {
+    if (!k230_data_valid) return;     // 已经超时，无需再计数
+    k230_timeout_cnt++;
+    if (k230_timeout_cnt >= K230_TIMEOUT_TICKS) {
+        k230_data_valid = 0;
+        k230_timeout_cnt = 0;
+    }
+}
+
+void K230_Timeout_Reset(void) {
+    k230_timeout_cnt = 0;
+    k230_data_valid = 0;   // Start 时强制从新鲜帧开始
 }

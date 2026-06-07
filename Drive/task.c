@@ -29,6 +29,7 @@
 #include "k230_track.h"
 #include "math.h"
 #include "yaw_track.h"
+#include "reach_point.h"   // Issue 03
 
 extern float target_angle;
 extern int16_t base_speed;
@@ -112,6 +113,7 @@ void Task_Key_Scan(void)
             angle_initialized = 0;   // P0#2: 角度过滤器哨兵归零，首帧无条件建立基线
             ControlState_Reset();    // P1+P2: 清零blind_ticks + turn_out_smooth + PID
             YawTrack_Reset(current_angle);
+            K230_Timeout_Reset();   // Issue 02: Start 时清零 K230 超时
             task_running = 1;
             while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET);
         }

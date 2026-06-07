@@ -34,6 +34,7 @@
 #include "task.h"
 #include "oled.h"
 #include "yaw_track.h"
+#include "reach_point.h"   // Issue 03: 声光指示
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,6 +45,10 @@ uint8_t rx_data;
 // ==== Pid para === 
 PID_TypeDef pid_left;
 PID_TypeDef pid_right;  
+#ifdef PID_USE_VELOCITY_FORM
+	PID_Velocity_TypeDef pid_vel_left;
+	PID_Velocity_TypeDef pid_vel_right;
+#endif
 
 // ====  pid ==== 
 int16_t target_v_left = 0;  // 左轮独立目标
@@ -63,6 +68,12 @@ volatile uint8_t blind_ticks = 0;      // P1#3: ISR盲开超时计数，提升�
 volatile float turn_out_smooth = 0;    // P2#5: ISR转弯平滑值，提升为文件级供 Start 清零
 extern uint8_t lap_count;
 extern uint8_t rotating;       // 旋转阶段标志 (task.c)
+
+#ifdef DEBUG_UART               // Issue 04: UART1 调试输出
+	static char debug_buf[80];
+	static volatile uint8_t debug_tick_cnt = 0;
+	#define DEBUG_TICK_INTERVAL 5
+#endif
 
 /* USER CODE END PTD */
 
@@ -144,6 +155,11 @@ int main(void)
 	PID_Init(&pid_left,0.9f, 0.12f, 0.0f, 500.0f);  // == lelf
 	PID_Init(&pid_right, 0.8f, 0.12f, 0.0f, 500.0f);  // == right
 	PID_Init(&pid_angle, 1.2f, 0.0f, 0.6f, 40.0f); // == angle
+#ifdef PID_USE_VELOCITY_FORM
+		PID_Velocity_Init(&pid_vel_left, 15.0f, 3.0f, 1000);
+		PID_Velocity_Init(&pid_vel_right, 15.0f, 3.0f, 1000);
+#endif
+		ReachPoint_Init();
 	Task_Manager_Init();
 	HAL_UART_Receive_IT(&huart2, &rx_data, 1);    
     HAL_UART_Receive_IT(&huart3, &k230_rx_data, 1);
@@ -172,6 +188,18 @@ int main(void)
 	  OLED_Refresh();
 	  OLED_ShowSignedNum(48, 48, lap_count, 4, 16, 1);
 	  OLED_ShowSignedNum(48, 56, (int16_t)YawTrack_GetCumulative(), 4, 16, 1);
+
+#ifdef DEBUG_UART
+	      if (debug_tick_cnt >= DEBUG_TICK_INTERVAL) {
+	          debug_tick_cnt = 0;
+		          int len = sprintf(debug_buf, "%d,%d,%.1f,%.1f,%d,%.1f
+",
+	              current_v_left, current_v_right,
+	              current_angle, target_angle,
+	              line_sensor_data, turn_out_smooth);
+	          HAL_UART_Transmit(&huart1, (uint8_t*)debug_buf, len, 10);
+	      }
+#endif
 
 	  //printf("%d\r\n",selected_task);
       HAL_Delay(10);
@@ -239,6 +267,11 @@ void ControlState_Reset(void) {
     PID_Init(&pid_left, 0.9f, 0.12f, 0.0f, 500.0f);
     PID_Init(&pid_right, 0.8f, 0.12f, 0.0f, 500.0f);
     PID_Init(&pid_angle, 1.2f, 0.0f, 0.6f, 40.0f);
+#ifdef PID_USE_VELOCITY_FORM
+		PID_Velocity_Init(&pid_vel_left, 15.0f, 3.0f, 1000);
+		PID_Velocity_Init(&pid_vel_right, 15.0f, 3.0f, 1000);
+#endif
+
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
@@ -266,6 +299,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
                 }
             }
             last_line_status = current_line;
+	        K230_Timeout_Tick();   // Issue 02: K230 超时检测
+	        ReachPoint_Tick();     // Issue 03: 声光自动恢复
         }
         // ================= 1. 数据清洗：角度突变过滤器 + NaN 哨兵 =================
         static float last_valid_angle = 0;
@@ -311,7 +346,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
                 while (angle_error < -180.0f) angle_error += 360.0f;
                 turn_out = PID_Compute(&pid_angle, angle_error, 0);
             }
-            else if (line_sensor_data == 0x00)
+            else if (line_sensor_data == 0x00 || !k230_data_valid)  // Issue 02
             {
                 // ---- 【模式 A：盲开模式】没有黑线，全白！听陀螺仪的，死死保住目标角度 ----
                 blind_ticks++;
@@ -354,7 +389,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         int16_t raw_l = Encoder_Get_Count_Left();
         static float fil_l = 0; 
         fil_l = 0.7f * fil_l + 0.3f * (float)raw_l; 
+#ifdef PID_USE_VELOCITY_FORM
+		float out_l = PID_Velocity_Compute(&pid_vel_left, target_v_left, (int)fil_l);
+#else
         float out_l = PID_Compute(&pid_left, (float)target_v_left, fil_l);
+#endif
         Motor_SetSpeed_A((int16_t)out_l);
         current_v_left = (int16_t)fil_l;
 
@@ -362,9 +401,16 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         int16_t raw_r = Encoder_Get_Count_Right();
         static float fil_r = 0; 
         fil_r = 0.7f * fil_r + 0.3f * (float)raw_r; 
+#ifdef PID_USE_VELOCITY_FORM
+		float out_r = PID_Velocity_Compute(&pid_vel_right, target_v_right, (int)fil_r);
+#else
         float out_r = PID_Compute(&pid_right, (float)target_v_right, fil_r);
+#endif
         Motor_SetSpeed_B((int16_t)out_r);
         current_v_right = (int16_t)fil_r;
+#ifdef DEBUG_UART
+			debug_tick_cnt++;                 // Issue 04: 调试计数
+#endif
 		//printf("%d,%d\r\n",raw_l,raw_r);
     }
 }
