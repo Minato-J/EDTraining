@@ -124,7 +124,9 @@ static void Run_Task_1(void)
 {
     if (count == 0)
     {
-        Car_StartLine(0.0f, BASE_SPEED_STRAIGHT, 0);   // Issue 06c
+        Car_SetTargetAngle(0.0f);                // R1: 独立setter，不重置平滑状态
+        Car_SetSpeed(BASE_SPEED_STRAIGHT);
+        Car_SetFFDiff(0);
     }
     else if (count == 1)
     {
@@ -162,22 +164,30 @@ static void Run_Task_2(void)
     {
         case 0:
             // A→B 直线段，保持初始朝向
-            Car_StartLine(0.0f, BASE_SPEED_STRAIGHT, 0);     // Issue 06c
+            Car_SetTargetAngle(0.0f);                // R1: 独立setter
+            Car_SetSpeed(BASE_SPEED_STRAIGHT);
+            Car_SetFFDiff(0);
             break;
 
         case 1:
             // B→C 右半圆弧
-            Car_StartLine(RIGHT_HALF_CIRCLE, BASE_SPEED_CURVE, 10);  // Issue 06c
+            Car_SetTargetAngle(RIGHT_HALF_CIRCLE);   // R1: 独立setter
+            Car_SetSpeed(BASE_SPEED_CURVE);
+            Car_SetFFDiff(10);
             break;
 
         case 2:
             // C→D 直线段，朝向 180°
-            Car_StartLine(180.0f, BASE_SPEED_STRAIGHT, 0);   // Issue 06c
+            Car_SetTargetAngle(180.0f);              // R1: 独立setter
+            Car_SetSpeed(BASE_SPEED_STRAIGHT);
+            Car_SetFFDiff(0);
             break;
 
         case 3:
             // D→A 左半圆弧
-            Car_StartLine(LEFT_HALF_CIRCLE, BASE_SPEED_CURVE, -10);  // Issue 06c
+            Car_SetTargetAngle(LEFT_HALF_CIRCLE);    // R1: 独立setter
+            Car_SetSpeed(BASE_SPEED_CURVE);
+            Car_SetFFDiff(-10);
             break;
 
         case 4:
@@ -224,28 +234,33 @@ static void Run_Task_3(void)
     {
         case 0:
             // ---------------- A→C 对角线段 ----------------
-            Car_StartLine(DIAG_AC_ANGLE, SPEED_STRAIGHT, 0);       // Issue 06d
+            Car_SetTargetAngle(DIAG_AC_ANGLE);               // R1: 独立setter
+            Car_SetSpeed(SPEED_STRAIGHT);
+            Car_SetFFDiff(0);
             break;
 
         case 1:
             // ---------------- C→B 段 (进弯刹车磨合期) ----------------
+            Car_SetTargetAngle(0.0f);                        // R1: 独立setter
             t3_wait_tick++;
-            Car_StartLine(0.0f,
-                (t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN, 0);  // Issue 06d
+            Car_SetSpeed((t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN);
+            Car_SetFFDiff(0);
             break;
 
         case 2:
             // ---------------- B→D 段 (进弯刹车) ----------------
+            Car_SetTargetAngle(DIAG_BD_ANGLE);               // R1: 独立setter
             t3_wait_tick++;
-            Car_StartLine(DIAG_BD_ANGLE,
-                (t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN, 0);  // Issue 06d
+            Car_SetSpeed((t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN);
+            Car_SetFFDiff(0);
             break;
 
         case 3:
             // ---------------- D→A 段 (进弯刹车) ----------------
+            Car_SetTargetAngle(180.0f);                      // R1: 独立setter
             t3_wait_tick++;
-            Car_StartLine(180.0f,
-                (t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN, 0);  // Issue 06d
+            Car_SetSpeed((t3_wait_tick <= TICK_IN_BRAKE) ? SPEED_IN_BRAKE : SPEED_CURVE_RUN);
+            Car_SetFFDiff(0);
             break;
 
         case 4:
@@ -599,19 +614,27 @@ static void Run_Task_5(void)
 
     if (count == 0)
     {
-        Car_StartLine(DIAG_AC_ANGLE, BASE_SPEED_STRAIGHT, 0);        // Issue 06c
+        Car_SetTargetAngle(DIAG_AC_ANGLE);           // R1: 独立setter
+        Car_SetSpeed(BASE_SPEED_STRAIGHT);
+        Car_SetFFDiff(0);
     }
     else if (count == 1)
     {
-        Car_StartLine(RIGHT_HALF_CIRCLE, BASE_SPEED_CURVE, 10);      // Issue 06c
+        Car_SetTargetAngle(RIGHT_HALF_CIRCLE);       // R1: 独立setter
+        Car_SetSpeed(BASE_SPEED_CURVE);
+        Car_SetFFDiff(10);
     }
     else if (count == 2)
     {
-        Car_StartLine(DIAG_BD_ANGLE, BASE_SPEED_STRAIGHT, 0);        // Issue 06c
+        Car_SetTargetAngle(DIAG_BD_ANGLE);           // R1: 独立setter
+        Car_SetSpeed(BASE_SPEED_STRAIGHT);
+        Car_SetFFDiff(0);
     }
     else if (count == 3)
     {
-        Car_StartLine(LEFT_HALF_CIRCLE, BASE_SPEED_CURVE, -10);      // Issue 06c
+        Car_SetTargetAngle(LEFT_HALF_CIRCLE);        // R1: 独立setter
+        Car_SetSpeed(BASE_SPEED_CURVE);
+        Car_SetFFDiff(-10);
     }
 }
 
